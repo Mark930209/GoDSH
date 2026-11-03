@@ -19,8 +19,8 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------- constants
     /** 本插件拥有的 locale 命名空间。 */
     const NS = 'composer-skill-picker';
-    /** 视为“当前项目自定义技能”的 SkillSource。 */
-    const PROJECT_SOURCES = new Set(['project-dsh', 'project-agents']);
+    /** 视为“当前项目自定义技能”的目录（相对项目根，与 DSH 的 project-* 技能根一致）。 */
+    const PROJECT_SKILL_DIRS = ['/.agents/skills/', '/.dsh/skills/'];
     /** 样式元素去重标记。 */
     const CSS_TAG = '@local/composer-skill-picker';
     /** 下拉箭头（与内置模型选择器同一枚 chevron）。 */
@@ -92,7 +92,49 @@ window.__ModuleLoader__.load({
       ctx.effect(() => locale.register(NS, { zh, en }), 'composer-skill-picker: dictionaries');
 
       /**
-       * 拉取当前项目的自定义技能（project-dsh / project-agents）。
+       * 读取会话 cwd 并规范化为“正斜杠 + 小写”，用于判断技能文件是否属于该项目。
+       * `skills/list` 的结果条目只有 path、name、description、whenToUse、modelInvocable，
+       * **没有 source**，所以不能按 source 过滤，只能按路径归属判断。
+       * @param {string} sessionId - 会话 id。
+       * @returns {string | undefined} 规范化后的 cwd；拿不到时 undefined。
+       */
+      function sessionCwd(sessionId) {
+        try {
+          const snapshot = sessions.list?.getSnapshot?.();
+          const cwd = snapshot?.byId?.[sessionId]?.cwd;
+          if (typeof cwd !== 'string' || cwd === '') return undefined;
+          return cwd.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+        } catch {
+          return undefined;
+        }
+      }
+
+      /**
+       * 判断一个技能文件是否属于该会话的项目。
+       * 项目根是 cwd 的祖先（DSH 用最近的含 `.git` 的祖先目录）；因此取
+       * `.agents/skills` 或 `.dsh/skills` 之前的目录前缀，只有它是 cwd 本身或
+       * cwd 的祖先才算项目技能——用户级 `<home>/.agents/skills` 便会被排除。
+       * @param {string | undefined} path - SKILL.md 的绝对路径。
+       * @param {string | undefined} cwd - 规范化后的会话 cwd。
+       * @returns {boolean} 是否属于当前项目。
+       */
+      function isProjectSkill(path, cwd) {
+        if (cwd === undefined) return true;
+        if (typeof path !== 'string' || path === '') return true;
+        const normalized = path.replace(/\\/g, '/').toLowerCase();
+        for (const marker of PROJECT_SKILL_DIRS) {
+          let at = normalized.indexOf(marker);
+          while (at >= 0) {
+            const root = normalized.slice(0, at);
+            if (root !== '' && (cwd === root || cwd.startsWith(`${root}/`))) return true;
+            at = normalized.indexOf(marker, at + 1);
+          }
+        }
+        return false;
+      }
+
+      /**
+       * 拉取当前项目的自定义技能。
        * 与内置 ui-skill 相同：要求会话已被保留且历史已打开，用临时引用持住会话
        * 直到 RPC 结束，避免会话在请求途中被回收。
        * @param {string} sessionId - 会话 id。
@@ -116,7 +158,13 @@ window.__ModuleLoader__.load({
           if (!result.ok) {
             throw new Error(`skills/list failed: ${result.error.code}: ${result.error.message}`);
           }
-          return result.value.skills.filter((skill) => PROJECT_SOURCES.has(skill.source));
+          const catalog = result.value.skills;
+          const cwd = sessionCwd(sessionId);
+          // 提供方不带 path（或拿不到 cwd）时不做归属过滤，避免列表莫名其妙为空。
+          if (cwd === undefined || catalog.every((skill) => typeof skill.path !== 'string')) {
+            return catalog;
+          }
+          return catalog.filter((skill) => isProjectSkill(skill.path, cwd));
         });
       }
 

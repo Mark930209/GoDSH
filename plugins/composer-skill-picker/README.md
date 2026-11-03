@@ -28,8 +28,10 @@
 
 - 插槽：`conversation.input.left`（id `composer-skill-picker`，order 80），渲染原生
   `<select>`（与内置模型选择器同一套样式：透明底、28px、右侧 chevron、主题配色）。
-- 候选：`ctx.remote.skills.list({ sessionId }, signal)`，过滤 `source ∈ {project-dsh, project-agents}`，
-  按名字排序；子代理会话返回空列表。
+- 候选：`ctx.remote.skills.list({ sessionId }, signal)`，然后按**路径归属**只保留项目技能：
+  `skills/list` 的返回条目只有 `path/name/description/whenToUse/modelInvocable`（**没有 `source`**），
+  所以取 `.agents/skills` / `.dsh/skills` 之前的目录前缀，与会话 cwd 比较——前缀是 cwd 本身或
+  其祖先才算项目技能（用户级 `<home>/.agents/skills` 因此被排除）；按名字排序。子代理会话返回空列表。
 - 插入：`inputActions.captureInsertion()` 取 CAS span → `insertText('/名字 ', span)`；
   CAS 失败则退回最新光标位置；随后 `conversation.input.for(actx).focus()` 把焦点交还输入框。
 - 空/加载/失败态直接显示在下拉框上（「当前项目没有技能」「技能加载中…」「技能加载失败」），

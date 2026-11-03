@@ -18,6 +18,9 @@
   无技能时禁用。
 - 中英双语（`locale/{zh,en}.json` + 运行时 `ctx.locale` 字典），跟随主题变量配色。
 - 子代理会话不提供候选。
+- **修复（1.0.0 内）**：`skills/list` 的返回条目没有 `source` 字段，最初按 `source` 过滤导致
+  列表永远为空（显示「当前项目没有技能」）；改为按段（`.agents/skills` / `.dsh/skills`）之前的
+  目录前缀与会话 cwd 比较来判定项目归属，用户级 `<home>/.agents/skills` 正确排除。
 
 ### Notes
 
