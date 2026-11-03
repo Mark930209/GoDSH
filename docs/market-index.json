@@ -81,17 +81,17 @@
           "community"
         ],
         "sortKeys": {
-          "updated": 1793688174
+          "updated": 1793688261
         }
       },
       "versions": [
         {
           "version": "1.0.0",
-          "publishTimestamp": 1793688174,
+          "publishTimestamp": 1793688261,
           "source": {
             "type": "git",
             "url": "https://github.com/Mark930209/GoDSH",
-            "commit": "47bbdcac7dfebfb8671204738ab6f389228d3ece",
+            "commit": "3abb8bc3a9d7675c5da3da7308b07408a67cd364",
             "path": "plugins/file-tree-context-menu"
           },
           "engines": {
