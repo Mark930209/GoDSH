@@ -1,8 +1,8 @@
 {
   "format": 1,
   "title": {
-    "en": "Cybertron Tools Market",
-    "zh": "Cybertron 工具市场"
+    "en": "GoDSH Plugin Market",
+    "zh": "GoDSH 插件市场"
   },
   "description": {
     "en": "Plugin market index for DeepSeek Harness bundles.",
@@ -47,10 +47,10 @@
         "zh": "在工作区文件树与交付物列表中右键文件或文件夹：复制绝对路径、相对路径或 @ 引用，一键加入对话。"
       },
       "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+CiAgPHBhdGggZD0iTTkgMTNhNCA0IDAgMCAxIDQtNGgxMS4yYTQgNCAwIDAgMSAzLjIgMS42TDMwLjYgMTVINTFhNCA0IDAgMCAxIDQgNHY2SDl6IiBmaWxsPSIjMjU2M0VCIi8+CiAgPHJlY3QgeD0iOSIgeT0iMjEiIHdpZHRoPSI0NiIgaGVpZ2h0PSIyNyIgcng9IjQiIGZpbGw9IiMzQjgyRjYiLz4KICA8cmVjdCB4PSIyMyIgeT0iMjUiIHdpZHRoPSIzNSIgaGVpZ2h0PSIyOSIgcng9IjQiIGZpbGw9IiNGRkZGRkYiIHN0cm9rZT0iIzFENEVEOCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgPHJlY3QgeD0iMjgiIHk9IjMwIiB3aWR0aD0iMjUiIGhlaWdodD0iNCIgcng9IjIiIGZpbGw9IiM5M0M1RkQiLz4KICA8cmVjdCB4PSIyOCIgeT0iMzciIHdpZHRoPSIyNSIgaGVpZ2h0PSI0IiByeD0iMiIgZmlsbD0iIzFENEVEOCIvPgogIDxyZWN0IHg9IjI4IiB5PSI0NCIgd2lkdGg9IjE3IiBoZWlnaHQ9IjQiIHJ4PSIyIiBmaWxsPSIjOTNDNUZEIi8+Cjwvc3ZnPgo=",
-      "author": "congzhisen",
-      "homepage": "https://github.com/congzhisen/dsh-plugins/tree/main/plugins/file-tree-context-menu",
+      "author": "Mark930209 <guimaxingtian@163.com>",
+      "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/file-tree-context-menu",
       "repository": {
-        "url": "https://github.com/congzhisen/dsh-plugins",
+        "url": "https://github.com/Mark930209/GoDSH",
         "directory": "plugins/file-tree-context-menu"
       },
       "metadata": {
@@ -69,17 +69,17 @@
           "community"
         ],
         "sortKeys": {
-          "updated": 1793677758
+          "updated": 1793678889
         }
       },
       "versions": [
         {
           "version": "1.1.0",
-          "publishTimestamp": 1793677758,
+          "publishTimestamp": 1793678889,
           "source": {
             "type": "git",
-            "url": "https://github.com/congzhisen/dsh-plugins",
-            "commit": "ed3a315bde1096e4afd1c2ebbf40d3e1b786ee8a",
+            "url": "https://github.com/Mark930209/GoDSH",
+            "commit": "0be102a0447418fcda9f5d441dca3b79d9eaf25c",
             "path": "plugins/file-tree-context-menu"
           },
           "engines": {
