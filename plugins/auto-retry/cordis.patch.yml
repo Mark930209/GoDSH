@@ -1,0 +1,13 @@
+- insert:
+    - id: auto-retry
+      name: '@local/auto-retry'
+      config:
+        enabled: true
+        maxRequestRetries: 6
+        initialRetryDelayMs: 2000
+        maxRetryDelayMs: 60000
+        resumeAfterFailure: true
+        maxConsecutiveResumes: 5
+        initialResumeDelayMs: 5000
+        maxResumeDelayMs: 120000
+        pauseOnUserInput: true

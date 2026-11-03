@@ -10,7 +10,7 @@
 多插件仓库 **GoDSH**（<https://github.com/Mark930209/GoDSH>）已完成 GitHub 化：
 git 身份已设为 `Mark930209 / guimaxingtian@163.com`，`origin` 已指向该仓库并已推送；
 新增 **CI 校验 / tag 发版 / Pages 部署** 三套工作流与 `scripts/release.mjs`、`scripts/validate-plugins.mjs`。
-现有插件 `file-tree-context-menu` **v1.0.0** 已在 `desktop` profile 安装并启用（`link:` 指向本仓库）。
+现有插件 `file-tree-context-menu` 与 `composer-skill-picker` **v1.0.0** 均已在 `desktop` profile 安装并启用（`link:` 指向本仓库）。
 版本号已按用户要求重置为 1.0.0（旧 1.1.0 / 1.2.0 tag 与 Release 将清理），并新增：
 复制 file:// / Markdown 链接、DSH 内预览、终端打开、AI 总结/解释、新建文件/文件夹、重命名、
 删除到回收站、多选批量加入对话；同时移除「打开方式…」。**以后只有用户明确要求时才发版。**
@@ -31,7 +31,7 @@ GitHub Pages 已启用并部署成功，公开市场索引：`https://mark930209
 | DSH 安装目录 | `E:\Users\congzhisen\AppData\Local\Programs\DeepSeek Harness` |
 | DSH 实现 checkout | `…\resources\app.asar\dsh`（**asar 归档**：PowerShell 读不到内部，必须用 read 工具） |
 | profile | `desktop`（`C:\Users\congzhisen\.dsh\profiles\desktop`） |
-| 插件安装方式 | `link:E:/Projects/DSH_Plugins_Dev/plugins/file-tree-context-menu` |
+| 插件安装方式 | `link:E:/Projects/DSH_Plugins_Dev/plugins/<插件名>`（现有 file-tree-context-menu、composer-skill-picker） |
 | Node / Git | v24.15.0 / 2.46.0 |
 | 验证基线 | DSH `0.2.1-rc.5`，Windows 桌面端 |
 
@@ -46,7 +46,10 @@ GoDSH/
 │         market-index.json, examples/)
 ├─ scripts/ (validate-plugins.mjs, new-plugin.mjs, release.mjs, make-market-index.mjs)
 ├─ templates/plugin-bundle/ (最小可运行模板)
-└─ plugins/file-tree-context-menu/   ← v1.0.0
+├─ plugins/file-tree-context-menu/   ← v1.0.0
+│  client.js index.js package.json(1.0.0) cordis.patch.yml icon.svg
+│  locale/{zh,en}.json README.md CHANGELOG.md LICENSE .gitignore .gitattributes
+└─ plugins/composer-skill-picker/    ← v1.0.0（输入框工具行的项目技能下拉框）
    client.js index.js package.json(1.0.0) cordis.patch.yml icon.svg
    locale/{zh,en}.json README.md CHANGELOG.md LICENSE .gitignore .gitattributes
 ```
@@ -79,6 +82,12 @@ GoDSH/
   新建文件/文件夹、重命名、回收站删除、多选批量操作；移除「打开方式…」。Host 新增
   `POST /api/ftcm.fileops`（工作区根校验、新建/重命名/回收站/终端），已用临时目录跑通
   创建/重命名/重复/越权/回收站测试。旧 tag/Release 清理后按 1.0.0 重新发布。
+- [x] **新插件 composer-skill-picker v1.0.0**（2026-11-03）：输入框工具行常驻「技能」下拉框
+  （`conversation.input.left`，order 80，原生 `<select>`，样式对齐内置模型选择器）；
+  自动发现当前项目的自定义技能（`project-dsh` = `.dsh/skills`、`project-agents` = `.agents/skills`），
+  按名字排序；选中即插入 `/技能名 ` 并把焦点交还输入框。首版曾做成「按钮 + commandUi
+  popupSelect 搜索弹窗」，按用户要求改为常驻下拉框后已重写。`node --check`、
+  `validate-plugins.mjs` 通过，已 `install_bundle` 安装到 desktop profile（`fiberPhase: active`）。
 
 ## 4. 待办（按优先级）
 
@@ -91,8 +100,11 @@ GoDSH/
    - 本机打开：默认应用 / 文件夹中显示 / HTML 用浏览器打开；
    - **不应**再出现「打开方式…」。
    任一项失败：DevTools 看 `[file-tree-context-menu]` 警告并反馈；修 bug 不自动发版。
-2. 计划下一个插件时：`node scripts\new-plugin.mjs <name>` → 开发 → `node scripts\validate-plugins.mjs --plugin <name>`。
-3. 可选：如需把 GitHub 身份设为全局，执行
+2. **验证 composer-skill-picker**：重启 DSH → 在 `E:\5_8U\Cybertron` 的会话里看工具行「技能」下拉框
+   是否列出 19 个项目技能（`.agents/skills/*`），选中是否插入 `/ec9-architect ` 且焦点回到输入框；
+   在本仓库（无项目技能）应显示「当前项目没有技能」并禁用。
+3. 计划下一个插件时：`node scripts\new-plugin.mjs <name>` → 开发 → `node scripts\validate-plugins.mjs --plugin <name>`。
+4. 可选：如需把 GitHub 身份设为全局，执行
    `git config --global user.name "Mark930209"` 与 `git config --global user.email "guimaxingtian@163.com"`。
 
 ## 5. 常用命令

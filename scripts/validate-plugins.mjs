@@ -85,7 +85,10 @@ for (const name of names) {
   const patchPath = join(dir, 'cordis.patch.yml');
   if (!existsSync(patchPath)) problems.push('缺少 cordis.patch.yml');
 
-  for (const js of ['index.js', 'client.js']) {
+  // index.js 是每个 bundle 的 Host 入口；client.js 只有声明了 dsh.client 的
+  // 插件才必需（Host-only 策略插件没有 Client 半部）。
+  const expected = pkg && pkg.dsh && pkg.dsh.client !== undefined ? ['index.js', 'client.js'] : ['index.js'];
+  for (const js of expected) {
     const file = join(dir, js);
     if (!existsSync(file)) {
       problems.push('缺少 ' + js);

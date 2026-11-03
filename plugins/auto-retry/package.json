@@ -1,0 +1,47 @@
+{
+  "name": "@local/auto-retry",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Retries a failed model request with exponential backoff, then resumes the same session after a delay when a round still fails, until the task completes or a bounded attempt budget is spent.",
+  "author": "Mark930209 <guimaxingtian@163.com>",
+  "license": "MIT",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "bundle",
+    "retry",
+    "recovery",
+    "resume",
+    "backoff",
+    "resilience",
+    "llm-failure"
+  ],
+  "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/auto-retry",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mark930209/GoDSH.git",
+    "directory": "plugins/auto-retry"
+  },
+  "scripts": {
+    "check": "node --check index.js",
+    "test": "node --test test/"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

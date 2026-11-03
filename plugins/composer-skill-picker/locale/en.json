@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Project Skill Picker",
+    "description": "Adds a persistent dropdown to the composer tool row that auto-discovers the current project's custom skills (.dsh/skills, .agents/skills) and inserts the /name token on pick, instead of scrolling the global slash menu."
+  }
+}

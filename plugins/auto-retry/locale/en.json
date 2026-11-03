@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Auto Retry & Resume",
+    "description": "Retries a failed model request with exponential backoff, then resumes the same session after a delay when a round still fails, until the task completes or a bounded attempt budget is spent."
+  }
+}

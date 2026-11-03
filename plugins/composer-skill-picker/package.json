@@ -1,0 +1,57 @@
+{
+  "name": "@local/composer-skill-picker",
+  "version": "1.0.0",
+  "description": "Pick a skill of the current project ( .dsh/skills, .agents/skills ) directly from the composer tool row and insert its /name token, instead of scrolling the global slash menu.",
+  "private": true,
+  "type": "module",
+  "author": "Mark930209 <guimaxingtian@163.com>",
+  "license": "MIT",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "bundle",
+    "skill",
+    "composer",
+    "picker",
+    "project",
+    "popup-select"
+  ],
+  "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/composer-skill-picker",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mark930209/GoDSH.git",
+    "directory": "plugins/composer-skill-picker"
+  },
+  "scripts": {
+    "check": "node --check client.js && node --check index.js"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-commands",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
+}

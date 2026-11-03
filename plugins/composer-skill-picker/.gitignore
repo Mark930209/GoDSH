@@ -1,0 +1,14 @@
+# 依赖与构建产物（本插件本身无第三方依赖，保留以防将来）
+node_modules/
+package-lock.json
+pnpm-lock.yaml
+
+# 日志与临时文件
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
+
+# 本地私有（不进仓库）
+*.local.*
+market-index.local.json

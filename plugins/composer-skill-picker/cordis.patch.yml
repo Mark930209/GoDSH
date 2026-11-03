@@ -1,0 +1,3 @@
+- insert:
+    - id: composer-skill-picker
+      name: '@local/composer-skill-picker'

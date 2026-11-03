@@ -58,7 +58,9 @@ node scripts\release.mjs dsh-my-plugin patch "修复右键菜单定位" --push
 
 | 插件 | 版本 | 说明 |
 |---|---|---|
-| [file-tree-context-menu](plugins/file-tree-context-menu/) | 1.1.0 | 工作区文件树 / 交付物列表右键：加入对话（引用芯片）、复制 @ 引用、复制绝对/相对路径 |
+| [file-tree-context-menu](plugins/file-tree-context-menu/) | 1.0.0 | 工作区文件树 / 交付物列表右键：加入对话（引用芯片）、复制 @ 引用 / 路径 / 链接、DSH 内预览、终端、新建 / 重命名 / 回收站、本机打开 |
+| [composer-skill-picker](plugins/composer-skill-picker/) | 1.0.0 | 输入框工具行常驻下拉框，自动发现项目技能（`.dsh/skills`、`.agents/skills`），选中即插入 `/技能名` |
+| [auto-retry](plugins/auto-retry/) | 1.0.0 | Host-only 策略插件：模型请求失败按指数退避重试，整轮仍失败则延时自动续跑同一会话，直到任务完成或达到次数上限 |
 
 ## 工作流（git）
 

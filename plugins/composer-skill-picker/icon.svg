@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-label="Project Skill Picker">
+  <rect x="4" y="4" width="56" height="56" rx="14" fill="#2563EB"/>
+  <path d="M30.4 11.6 34.9 24.1 47.4 28.6 34.9 33.1 30.4 45.6 25.9 33.1 13.4 28.6 25.9 24.1 30.4 11.6Z" fill="#FFFFFF"/>
+  <circle cx="47.6" cy="47.6" r="6.2" fill="#FFFFFF" opacity="0.7"/>
+</svg>
