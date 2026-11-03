@@ -10,7 +10,7 @@
 | `package.json` | 清单：`exports`、`files`、`dsh.bundle.patch`、`dsh.client` |
 | `cordis.patch.yml` | bundle patch，往组合里 `insert` 本插件的行 |
 | `index.js` | Host 半部（不写 UI 时 `export function apply() {}` 即可） |
-| `client.js` | **Client 半部（UI 都在这）** |
+| `client.js` | **Client 半部（UI 都在这）**；**只有声明了 `dsh.client` 才需要**，Host-only 策略插件可以没有 |
 | `locale/{zh,en}.json` | 市场/管理页展示用 `meta.title`/`meta.description` |
 | `icon.svg` | 图标（市场索引内嵌 ≤32 KiB） |
 
@@ -209,7 +209,71 @@ export function apply(ctx) {
   路径通过环境变量传入，避免命令拼接注入。
 - 纯 Web / 非 Windows 环境必须返回明确错误，Client 显示失败反馈。
 
-## 11. 版本与发版策略
+## 11. Host 策略插件：失败重试与自动续跑
+
+参考实现：`plugins/auto-retry/`（Host-only，无 `client.js`，`node --test test/` 覆盖行为）。
+所有接口都用 `cordis_inspect_query` 的 `Event` / `Service` 核实过。
+
+### 11.1 事件与作用域
+
+| 事件 / 服务 | 模式 | 载荷 |
+|---|---|---|
+| `agent/request-error` | waterfall | `{ agent, turn, step, provider, failure: LlmFailure, retryPolicy, signal }` |
+| `session/event` | emit | `(session, event)`，`event.type === 'turn/end'` 时 `event.data.reason.kind` ∈ `completed/error/aborted/blocked/interrupted/max-tokens/forked` |
+| `agent/inbox/inserted` | emit | `{ agent, message }` |
+| `agent/disposed` | emit | `{ agent }` |
+| `ctx.agents` | Service | `get(id)` / `list()` / `roots()` |
+| `agent` 句柄 | — | `status`（`idle`/`running`）、`session`、`followup(message)`、`steer()`、`inject()`、`cancel()`、`whenIdle()` |
+
+**根上下文注册的 `ctx.on('agent/xxx')` 会收到所有 agent 的事件**（agent 作用域只过滤注册在
+`agent.ctx` 上的监听）。看 `@deepseek-ai/dsh-goal-round-driver` 的 `apply()` 即知：
+它在插件根上下文监听 `agent/pre-step` / `agent/inbox/inserted` 并驱动全部会话。
+
+### 11.2 让失败的模型请求重试
+
+`agent-loop` 的 `step()` 在一个 `while (true)` 里请求模型；失败时分发 waterfall，
+**监听器返回 `{ kind: 'retry' }` 即继续同一请求，不重新追加用户消息**（因此无副作用重复）：
+
+```js
+ctx.on('agent/request-error', async ({ agent, turn, step, failure, signal }, next) => {
+  if (signal.aborted) return next();              // 用户停止：不要重试
+  if (classify(failure) !== 'transient') return next();
+  await sleep(delay, signal);                     // 退避 + 抖动，尊重 providerRetryAfterMs
+  return { kind: 'retry' };
+});
+```
+
+要点：
+
+- **必须 `await next()` 或返回 `{kind:'retry'}`**；不调用 `next()` 就是自己接管恢复。
+- 保持同一 `signal`：abort 后 loop 会立刻 `throwIfAborted()`，不要遮住用户的停止。
+- 加次数上限（按 `turn:step` 计数），否则一次持续故障会无限重试。
+- 需要优雅退避时用 `unref()` 的定时器 + `signal` 竞速，别让退出被挂起的重试拖住。
+
+### 11.3 整轮失败后自动续跑
+
+`turn/end` 的 `reason.kind === 'error'` 才是「这一轮真的失败了」；`aborted`（用户停止）、
+`blocked`（pre-step 拒绝）、`max-tokens` 都不应该自动续跑。续跑要点：
+
+```js
+const message = deepFreeze({
+  id: randomUUID(), role: 'user',
+  content: [{ type: 'text', text: '<auto_resume>…</auto_resume>' }],
+  source: { kind: '<plugin-id>', attempt }        // 自定义 kind 合法，用于识别自己的消息
+});
+agent.followup(message);
+```
+
+- **必须等 agent 变成 `idle` 再 `followup`**：`turn/end` 在 `turn()` 的 `finally` 里提交，
+  此时 `status` 仍是 `running`，且 driver 有个唤醒竞态——在 running 期间 `followup` 会把消息
+  排进 inbox 却**不会**唤醒 driver，消息就卡住。用延时定时器，回调里再校验
+  `ctx.agents.get(id) === agent && agent.status === 'idle'`。
+- 想少依赖宿主内部包时，不要 `import { createUserMessage } from '@deepseek-ai/dsh-llm'`
+  （profile 里没有 `@deepseek-ai`，裸 import 解析不到）；按上面的形状自己构造并深冻结即可。
+- 预算要用**连续失败**计数，任一非 error 轮次结束就清零；用户发言也清零并取消待续跑。
+- 卸载时清空所有待发定时器，否则插件卸载后还会往会话里塞消息。
+
+## 12. 版本与发版策略
 
 **只有用户明确说「发版 / release / 升版本」时才执行 bump、tag、Release 与市场索引刷新。**
 日常改代码只提交，不自动发版；当前本仓库插件统一为 **1.0.0**，旧的 1.1.0 / 1.2.0 编号已废弃。

@@ -18,6 +18,11 @@ git 身份已设为 `Mark930209 / guimaxingtian@163.com`，`origin` 已指向该
 **待人工验证**：重启 DeepSeek Harness 后，逐项检查 §4.1 的新菜单（尤其文件操作/回收站/终端/多选）。
 GitHub Pages 已启用并部署成功，公开市场索引：`https://mark930209.github.io/GoDSH/market-index.json`。
 
+**新增（2026-11-03）· 插件 `auto-retry` v1.0.0**：Host-only、无 UI 的失败恢复策略插件，
+已 `install_bundle` 安装到 desktop profile（`application: applied`）。
+模型请求失败按指数退避重试；整轮仍失败则延时自动续跑同一会话，直到任务完成或达到次数上限。
+11 项行为测试通过（`node --test test/auto-retry.test.mjs`）；真实故障冒烟见 §4.3。
+
 ---
 
 ## 1. 环境事实（可直接照抄使用）
@@ -31,7 +36,7 @@ GitHub Pages 已启用并部署成功，公开市场索引：`https://mark930209
 | DSH 安装目录 | `E:\Users\congzhisen\AppData\Local\Programs\DeepSeek Harness` |
 | DSH 实现 checkout | `…\resources\app.asar\dsh`（**asar 归档**：PowerShell 读不到内部，必须用 read 工具） |
 | profile | `desktop`（`C:\Users\congzhisen\.dsh\profiles\desktop`） |
-| 插件安装方式 | `link:E:/Projects/DSH_Plugins_Dev/plugins/<插件名>`（现有 file-tree-context-menu、composer-skill-picker） |
+| 插件安装方式 | `link:E:/Projects/DSH_Plugins_Dev/plugins/<插件名>`（现有 file-tree-context-menu、composer-skill-picker、auto-retry） |
 | Node / Git | v24.15.0 / 2.46.0 |
 | 验证基线 | DSH `0.2.1-rc.5`，Windows 桌面端 |
 
@@ -50,8 +55,12 @@ GoDSH/
 │  client.js index.js package.json(1.0.0) cordis.patch.yml icon.svg
 │  locale/{zh,en}.json README.md CHANGELOG.md LICENSE .gitignore .gitattributes
 └─ plugins/composer-skill-picker/    ← v1.0.0（输入框工具行的项目技能下拉框）
-   client.js index.js package.json(1.0.0) cordis.patch.yml icon.svg
-   locale/{zh,en}.json README.md CHANGELOG.md LICENSE .gitignore .gitattributes
+│  client.js index.js package.json(1.0.0) cordis.patch.yml icon.svg
+│  locale/{zh,en}.json README.md CHANGELOG.md LICENSE .gitignore .gitattributes
+└─ plugins/auto-retry/               ← v1.0.0（Host-only，无 client.js）
+   index.js package.json cordis.patch.yml icon.svg
+   locale/{zh,en}.json README.md CHANGELOG.md LICENSE
+   test/auto-retry.test.mjs
 ```
 
 ## 3. 已完成
@@ -88,6 +97,24 @@ GoDSH/
   按名字排序；选中即插入 `/技能名 ` 并把焦点交还输入框。首版曾做成「按钮 + commandUi
   popupSelect 搜索弹窗」，按用户要求改为常驻下拉框后已重写。`node --check`、
   `validate-plugins.mjs` 通过，已 `install_bundle` 安装到 desktop profile（`fiberPhase: active`）。
+- [x] **新插件 auto-retry v1.0.0**（2026-11-03）：Host-only 失败恢复策略插件，无 UI、不写自有会话事件。
+  - 第 1 层 `agent/request-error`（waterfall）：失败模型请求按 `指数退避 + 抖动` 延后重试并返回
+    `{ kind: 'retry' }`；同一步内不重新追加用户消息；尊重 `providerRetryAfterMs`；按 `turn:step`
+    计数到 `maxRequestRetries`（默认 6）。
+  - 第 2 层 `turn/end`（`reason.kind === 'error'`）：延时 `agent.followup()` 一条 `<auto_resume>`
+    续跑提示，连续失败计数到 `maxConsecutiveResumes`（默认 5）；`completed`/`aborted`/`blocked`
+    轮次清零预算。
+  - 失败分类：5xx 与 408/409/425/429 可重试；`AUTH`/`API_KEY`/`QUOTA`/`INSUFFICIENT`/
+    `CONTEXT_LENGTH`/`CONTENT_FILTER`/`NO_ADAPTER` 等不可重试 code **优先于状态码**判定
+    （测试发现 429 + 额度类 code 会被误判为可重试，已修）。
+  - 安全边界：`aborted`（用户停止）不续跑；`pauseOnUserInput` 下用户自己发消息取消待续跑；
+    agent 忙碌/已销毁时跳过；插件卸载清空全部待发定时器。
+  - 不 import 任何 `@deepseek-ai/*`：`inject = ['agents']`，续跑消息按 `createUserMessage` 的
+    形状（`{id, role:'user', content, source}` + 深冻结）自行构造，避免跨 bundle 解析问题。
+  - 测试：`test/auto-retry.test.mjs` 用假 Cordis 上下文重放真实事件负载，**11 项全部通过**。
+  - 已 `install_bundle` → `application: applied`，`Config.listConfigs` 可见行 `auto-retry`。
+- [x] **`validate-plugins.mjs` 修正**：`client.js` 改为**仅当 `dsh.client` 已声明时**才必需，
+  使 Host-only bundle 能通过校验（此前硬性要求 client.js，auto-retry 首次校验即失败）。
 
 ## 4. 待办（按优先级）
 
@@ -103,8 +130,19 @@ GoDSH/
 2. **验证 composer-skill-picker**：重启 DSH → 在 `E:\5_8U\Cybertron` 的会话里看工具行「技能」下拉框
    是否列出 19 个项目技能（`.agents/skills/*`），选中是否插入 `/ec9-architect ` 且焦点回到输入框；
    在本仓库（无项目技能）应显示「当前项目没有技能」并禁用。
-3. 计划下一个插件时：`node scripts\new-plugin.mjs <name>` → 开发 → `node scripts\validate-plugins.mjs --plugin <name>`。
-4. 可选：如需把 GitHub 身份设为全局，执行
+3. **验证 auto-retry（需要一次真实失败）**：重启 DSH 后，
+   - 正常续跑：随便让 agent 跑一个多步任务，中途断网 / 拔 VPN 触发模型请求失败，
+     观察是否在 2s、4s、8s… 后自动重试而不是直接报错结束；
+   - 整轮失败：若失败不是模型请求（例如工具崩溃），应看到日志
+     `[auto-retry] agent "...": turn failed (...); resume 1/5 scheduling in ...ms`，
+     随后约 5s 后会话自动继续；
+   - 用户干预：待续跑期间自己发一句话，应取消已排队的续跑；
+   - 停止按钮：点停止不应触发任何续跑；
+   - 日志前缀统一为 `[auto-retry]`（Host 侧 `ctx.logger`，桌面端 stderr / 日志面板）。
+   若未观察到任何 `[auto-retry]` 日志：说明插件未激活或 root 监听收不到 agent 作用域事件，
+   改用 `agent.ctx`（在 `agent/created` 里注册）的方案。
+4. 计划下一个插件时：`node scripts\new-plugin.mjs <name>` → 开发 → `node scripts\validate-plugins.mjs --plugin <name>`。
+5. 可选：如需把 GitHub 身份设为全局，执行
    `git config --global user.name "Mark930209"` 与 `git config --global user.email "guimaxingtian@163.com"`。
 
 ## 5. 常用命令
