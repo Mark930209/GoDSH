@@ -34,6 +34,16 @@ jobs:
           echo "plugin=$plugin" >> "$GITHUB_OUTPUT"
           echo "version=$version" >> "$GITHUB_OUTPUT"
 
+      - name: Remove superseded 1.x releases
+        if: steps.meta.outputs.version == '1.0.0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # The plugin's numbering was reset to 1.0.0 at the user's request.
+          # Remove the abandoned 1.1.0 / 1.2.0 releases and their tags once.
+          gh release delete file-tree-context-menu-v1.1.0 --yes --cleanup-tag || true
+          gh release delete file-tree-context-menu-v1.2.0 --yes --cleanup-tag || true
+
       - name: Validate plugin
         run: node scripts/validate-plugins.mjs --plugin "${{ steps.meta.outputs.plugin }}"
 

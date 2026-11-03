@@ -19,8 +19,9 @@
 
 1. 小步改 → `node --check client.js`（及 JSON 解析）→ 重启冒烟。
 2. 更新该插件的 `CHANGELOG.md`。
-3. 发版：仓库根执行 `node scripts\release.mjs <name> patch|minor|major "摘要" [--push]`
+3. **只有用户明确要求发版时**才发版：仓库根执行 `node scripts\release.mjs <name> patch|minor|major "摘要" [--push]`
    （自动 bump、提交、打 `<name>-vX.Y.Z` tag、刷新市场索引；推 tag 后 CI 自动建 Release 并回写索引）。
+   日常改代码**不要** bump 版本、不要打 tag、不要建 Release；当前插件统一 1.0.0。
 4. `git commit` 要勤——**不要积累未提交的改动**（本仓库发生过误删事故，教训见 docs/repo-layout.md）。
 5. 发布/索引/CI：`docs/publishing.md`、`CONTRIBUTING.md`；版本与回滚：`docs/maintenance.md`。
 

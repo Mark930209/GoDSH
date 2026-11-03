@@ -10,11 +10,12 @@
 多插件仓库 **GoDSH**（<https://github.com/Mark930209/GoDSH>）已完成 GitHub 化：
 git 身份已设为 `Mark930209 / guimaxingtian@163.com`，`origin` 已指向该仓库并已推送；
 新增 **CI 校验 / tag 发版 / Pages 部署** 三套工作流与 `scripts/release.mjs`、`scripts/validate-plugins.mjs`。
-现有插件 `file-tree-context-menu` **v1.2.0** 已在 `desktop` profile 安装并启用（`link:` 指向本仓库）。
-v1.2.0 新增「用默认应用打开 / 在文件夹中显示 / 用浏览器打开 / 打开方式… / 复制名称」，
-已推送并发布 GitHub Release（tag `file-tree-context-menu-v1.2.0`），公开市场索引已收录 1.2.0。
+现有插件 `file-tree-context-menu` **v1.0.0** 已在 `desktop` profile 安装并启用（`link:` 指向本仓库）。
+版本号已按用户要求重置为 1.0.0（旧 1.1.0 / 1.2.0 tag 与 Release 将清理），并新增：
+复制 file:// / Markdown 链接、DSH 内预览、终端打开、AI 总结/解释、新建文件/文件夹、重命名、
+删除到回收站、多选批量加入对话；同时移除「打开方式…」。**以后只有用户明确要求时才发版。**
 
-**待人工验证**：重启 DeepSeek Harness 后，检查蓝色引用芯片与 v1.2.0 的本机打开菜单（见 §4.1）。
+**待人工验证**：重启 DeepSeek Harness 后，逐项检查 §4.1 的新菜单（尤其文件操作/回收站/终端/多选）。
 GitHub Pages 已启用并部署成功，公开市场索引：`https://mark930209.github.io/GoDSH/market-index.json`。
 
 ---
@@ -45,8 +46,8 @@ GoDSH/
 │         market-index.json, examples/)
 ├─ scripts/ (validate-plugins.mjs, new-plugin.mjs, release.mjs, make-market-index.mjs)
 ├─ templates/plugin-bundle/ (最小可运行模板)
-└─ plugins/file-tree-context-menu/   ← v1.2.0
-   client.js index.js package.json(1.2.0) cordis.patch.yml icon.svg
+└─ plugins/file-tree-context-menu/   ← v1.0.0
+   client.js index.js package.json(1.0.0) cordis.patch.yml icon.svg
    locale/{zh,en}.json README.md CHANGELOG.md LICENSE .gitignore .gitattributes
 ```
 
@@ -74,15 +75,22 @@ GoDSH/
   `https://mark930209.github.io/GoDSH/market-index.json` 已收录 1.2.0。
 - [x] **release.yml 修复**：tag 提交可能落后 main，刷新索引改为先 `git checkout -B main origin/main`
   再生成并推送，避免 `HEAD:main` 非快进失败（v1.2.0 首次运行即在此步骤失败，已修复，后续发版正常）。
+- [x] **v1.0.0 重发行**：版本重置为 1.0.0；新增复制 file:// / Markdown、DSH 预览、终端、AI 总结/解释、
+  新建文件/文件夹、重命名、回收站删除、多选批量操作；移除「打开方式…」。Host 新增
+  `POST /api/ftcm.fileops`（工作区根校验、新建/重命名/回收站/终端），已用临时目录跑通
+  创建/重命名/重复/越权/回收站测试。旧 tag/Release 清理后按 1.0.0 重新发布。
 
 ## 4. 待办（按优先级）
 
-1. **验证 v1.2.0**：完全退出 DSH 桌面端（含托盘）→ 重启 → 右键文件检查：
-   - 「加入对话」是否出现**蓝色引用芯片**（旧验证项）；
-   - 是否出现「用默认应用打开 / 在文件夹中显示 / 打开方式…」；HTML 另有「用浏览器打开」；
-   - 「在文件夹中显示」是否在资源管理器定位选中；HTML「用浏览器打开」是否进浏览器；
-   - 「打开方式…」是否列出应用（带图标/默认标记）并能打开。
-   任一项失败：DevTools 看 `[file-tree-context-menu]` 警告并反馈；必要时发 `v1.2.1` 修复。
+1. **验证 v1.0.0**：完全退出 DSH 桌面端（含托盘）→ 重启 → 右键文件/文件夹检查：
+   - 「加入对话」蓝色引用芯片；「用 AI 总结/解释」是否填入引用+提问；
+   - 「复制 file:// 链接 / Markdown 链接」内容是否正确；「在 DSH 中预览」是否打开右侧预览；
+   - 「在终端中打开」是否弹出 PowerShell 且位于目标目录；
+   - 新建文件、新建文件夹、重命名、删除到回收站是否成功且文件树自动刷新；
+   - Ctrl/Cmd 多选 + 右键「加入对话（N 项）」是否批量插入；普通单击是否清空选择；
+   - 本机打开：默认应用 / 文件夹中显示 / HTML 用浏览器打开；
+   - **不应**再出现「打开方式…」。
+   任一项失败：DevTools 看 `[file-tree-context-menu]` 警告并反馈；修 bug 不自动发版。
 2. 计划下一个插件时：`node scripts\new-plugin.mjs <name>` → 开发 → `node scripts\validate-plugins.mjs --plugin <name>`。
 3. 可选：如需把 GitHub 身份设为全局，执行
    `git config --global user.name "Mark930209"` 与 `git config --global user.email "guimaxingtian@163.com"`。
@@ -93,7 +101,7 @@ GoDSH/
 cd E:\Projects\DSH_Plugins_Dev
 node scripts\new-plugin.mjs dsh-xxx                              # 新插件（自动套 repo.config.json）
 node scripts\validate-plugins.mjs [--plugin <name>] [--since origin/main]
-node scripts\release.mjs <name> patch "变更摘要" [--push]         # 发版（bump→tag→索引→推送）
+node scripts\release.mjs <name> patch "变更摘要" [--push]         # 仅用户明确要求时发版
 node scripts\make-market-index.mjs                               # 手动刷新索引
 # 安装（让 agent 执行）: plugin_manager install_bundle target=<插件绝对路径>
 # 重启 DeepSeek Harness（托盘退出再开）验证

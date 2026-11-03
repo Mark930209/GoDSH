@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "File Tree Context Menu",
-    "description": "Right-click files or folders in the workspace file tree and deliverable lists to add them to the conversation, copy paths, open with the default app or a browser, or reveal them in the file manager."
+    "description": "Right-click files or folders in the workspace file tree and deliverable lists to add them to the conversation, copy paths/links, preview in DSH, open in a terminal, summarize or explain with AI, create/rename/delete entries, or reveal them in the file manager."
   }
 }

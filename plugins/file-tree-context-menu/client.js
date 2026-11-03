@@ -6,12 +6,13 @@
  * changed-files card / review file selector owned by
  * @deepseek-ai/dsh-client-ui-deliverables — opens a small menu that can:
  *   - add the file/folder to the conversation composer as a reference chip,
- *   - copy the @-mention form,
+ *   - copy the @-mention form, file:// URL, Markdown link, absolute/relative path,
+ *   - preview the file in DSH's right sidebar,
  *   - open it with the default application (a web page lands in the browser),
- *   - reveal it in the OS file manager,
- *   - open a web page in a detected browser,
- *   - pick any registered handler under "open with",
- *   - copy the absolute host path, the workspace-relative path, or the name.
+ *   - reveal it in the OS file manager, or open a terminal at its folder,
+ *   - summarize / explain it with AI by pre-filling a prompt,
+ *   - create files/folders, rename, and move entries to the Recycle Bin,
+ *   - multi-select rows and batch-add or batch-copy them.
  *
  * Open/reveal reuse the core Session Remote (`ctx.remote.session`):
  * `openWorkspacePath({ path, action })` and `workspacePathApplications({ path })`,
@@ -50,19 +51,47 @@ window.__ModuleLoader__.load({
       'menu.openFolder': '在文件管理器中打开',
       'menu.reveal': '在文件夹中显示',
       'menu.browser': '用浏览器打开',
-      'menu.openWith': '打开方式…',
-      'menu.back': '返回',
-      'menu.defaultApp': '默认',
+      'menu.preview': '在 DSH 中预览',
+      'menu.terminal': '在终端中打开',
+      'menu.terminalHere': '在终端中打开所在目录',
+      'menu.aiSummary': '用 AI 总结',
+      'menu.aiExplain': '用 AI 解释',
+      'ai.summaryPrompt': '请总结这个文件的要点。',
+      'ai.explainPrompt': '请解释这个文件的内容和作用。',
+      'menu.copyFileUrl': '复制 file:// 链接',
+      'menu.copyMarkdown': '复制 Markdown 链接',
+      'menu.newFile': '新建文件',
+      'menu.newFolder': '新建文件夹',
+      'menu.rename': '重命名',
+      'menu.delete': '删除（移到回收站）',
+      'menu.selectedCount': '已选 {count} 项',
+      'menu.addSelected': '加入对话（{count} 项）',
+      'menu.copySelected': '复制已选路径',
+      'menu.clearSelection': '清空选择',
+      'menu.createIn': '新建于「{name}」',
+      'form.newFileTitle': '新建文件',
+      'form.newFolderTitle': '新建文件夹',
+      'form.renameTitle': '重命名',
+      'form.deleteTitle': '删除',
+      'form.namePlaceholder': '名称',
+      'form.confirm': '确定',
+      'form.cancel': '取消',
+      'form.deleteFile': '将“{name}”移到回收站？',
+      'form.deleteFolder': '将文件夹“{name}”及其全部内容移到回收站？',
+      'status.created': '已创建',
+      'status.renamed': '已重命名',
+      'status.deleted': '已移到回收站',
+      'status.opFailed': '文件操作失败',
+      'status.nameRequired': '请输入名称',
+      'status.previewFailed': '无法在 DSH 中预览',
+      'status.termFailed': '无法打开终端',
       'status.copied': '已复制',
       'status.addedText': '已插入文本（非芯片）',
       'status.failed': '操作失败',
       'status.opened': '已打开',
       'status.openFailed': '打开失败',
       'status.revealFailed': '无法显示位置',
-      'status.unavailable': '当前环境不支持本地打开',
-      'status.loading': '正在获取应用…',
-      'status.noApps': '没有可用的应用程序',
-      'status.appsFailed': '无法获取应用列表'
+      'status.unavailable': '当前环境不支持本地打开'
     };
     /** English dictionary, key-identical to the Chinese source of truth. */
     const en = {
@@ -76,19 +105,47 @@ window.__ModuleLoader__.load({
       'menu.openFolder': 'Open in file manager',
       'menu.reveal': 'Show in folder',
       'menu.browser': 'Open in browser',
-      'menu.openWith': 'Open with…',
-      'menu.back': 'Back',
-      'menu.defaultApp': 'Default',
+      'menu.preview': 'Preview in DSH',
+      'menu.terminal': 'Open in terminal',
+      'menu.terminalHere': 'Open containing folder in terminal',
+      'menu.aiSummary': 'Summarize with AI',
+      'menu.aiExplain': 'Explain with AI',
+      'ai.summaryPrompt': 'Please summarize the key points of this file.',
+      'ai.explainPrompt': 'Please explain the contents and purpose of this file.',
+      'menu.copyFileUrl': 'Copy file:// link',
+      'menu.copyMarkdown': 'Copy Markdown link',
+      'menu.newFile': 'New file',
+      'menu.newFolder': 'New folder',
+      'menu.rename': 'Rename',
+      'menu.delete': 'Delete (move to Recycle Bin)',
+      'menu.selectedCount': '{count} selected',
+      'menu.addSelected': 'Add {count} to conversation',
+      'menu.copySelected': 'Copy selected paths',
+      'menu.clearSelection': 'Clear selection',
+      'menu.createIn': 'Create in “{name}”',
+      'form.newFileTitle': 'New file',
+      'form.newFolderTitle': 'New folder',
+      'form.renameTitle': 'Rename',
+      'form.deleteTitle': 'Delete',
+      'form.namePlaceholder': 'Name',
+      'form.confirm': 'OK',
+      'form.cancel': 'Cancel',
+      'form.deleteFile': 'Move “{name}” to the Recycle Bin?',
+      'form.deleteFolder': 'Move folder “{name}” and all its contents to the Recycle Bin?',
+      'status.created': 'Created',
+      'status.renamed': 'Renamed',
+      'status.deleted': 'Moved to Recycle Bin',
+      'status.opFailed': 'File operation failed',
+      'status.nameRequired': 'Enter a name',
+      'status.previewFailed': 'Could not preview in DSH',
+      'status.termFailed': 'Could not open terminal',
       'status.copied': 'Copied',
       'status.addedText': 'Inserted as text (no chip)',
       'status.failed': 'Action failed',
       'status.opened': 'Opened',
       'status.openFailed': 'Could not open',
       'status.revealFailed': 'Could not show location',
-      'status.unavailable': 'Local opening is unavailable here',
-      'status.loading': 'Loading applications…',
-      'status.noApps': 'No applications available',
-      'status.appsFailed': 'Could not load applications'
+      'status.unavailable': 'Local opening is unavailable here'
     };
 
     // ------------------------------------------------------------------ css
@@ -111,7 +168,23 @@ window.__ModuleLoader__.load({
       '.ftcm-hint{margin-left:6px;color:var(--dsw-alias-label-tertiary);font-size:11px;}',
       '.ftcm-note{padding:6px 10px;color:var(--dsw-alias-label-tertiary);font-size:12px;}',
       '.ftcm-panel{max-height:calc(100vh - 16px);overflow-y:auto;}',
-      '.ftcm-sep{height:1px;margin:4px 6px;background:var(--dsw-alias-border-l1);}'
+      '.ftcm-sep{height:1px;margin:4px 6px;background:var(--dsw-alias-border-l1);}',
+      'li[data-ftcm-selected="true"]{background:var(--dsw-alias-bg-layer-2);',
+      'box-shadow:inset 2px 0 0 var(--dsw-alias-brand-primary);}',
+      '.ftcm-form{display:flex;flex-direction:column;gap:8px;padding:8px 10px 10px;min-width:240px;}',
+      '.ftcm-form-title{font-weight:600;color:var(--dsw-alias-label-primary);}',
+      '.ftcm-form-desc{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.5;white-space:normal;}',
+      '.ftcm-input{height:30px;padding:0 8px;border-radius:6px;border:1px solid var(--dsw-alias-border-l2);',
+      'background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;outline:none;box-sizing:border-box;}',
+      '.ftcm-input:focus{border-color:var(--dsw-alias-brand-primary);}',
+      '.ftcm-form-error{color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:1.4;}',
+      '.ftcm-form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:2px;}',
+      '.ftcm-btn{height:28px;padding:0 12px;border-radius:6px;border:1px solid var(--dsw-alias-border-l2);',
+      'background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;cursor:pointer;}',
+      '.ftcm-btn:hover{background:var(--dsw-alias-bg-layer-2);}',
+      '.ftcm-btn-primary{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:#fff;}',
+      '.ftcm-btn-danger{background:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary);color:#fff;}',
+      '.ftcm-btn:disabled{opacity:.55;cursor:default;}'
     ].join('');
 
     /** Insert the plugin stylesheet, preferring the Client `styles` builtin. */
@@ -141,6 +214,10 @@ window.__ModuleLoader__.load({
     let desktopAvailable = null;
     /** Client plugin context, kept for `ctx.get(...)` service lookups. */
     let pluginCtx = null;
+    /** Ctrl/Shift multi-selection of file-tree rows: {root, path, kind}. */
+    let selection = [];
+    /** Anchor entry for Shift range selection. */
+    let selectionAnchor = null;
     const listeners = new Set();
 
     function publish() {
@@ -154,7 +231,7 @@ window.__ModuleLoader__.load({
       return state;
     }
     function openMenu(next) {
-      state = { menu: { ...next, view: 'main', apps: null, appsError: false }, feedback: null };
+      state = { menu: { ...next, view: 'main', prompt: null }, feedback: null };
       publish();
     }
     function closeMenu() {
@@ -166,6 +243,119 @@ window.__ModuleLoader__.load({
       if (state.menu === null) return;
       state = { menu: state.menu, feedback: { key, ok, textKey } };
       publish();
+    }
+    /** Switch the open menu to an inline text/confirmation form. */
+    function openPrompt(mode, fields) {
+      if (state.menu === null) return;
+      state = { menu: { ...state.menu, view: 'prompt', prompt: { mode, value: '', error: null, ...fields } }, feedback: null };
+      publish();
+    }
+    /** Keep the inline form's controlled input in sync. */
+    function setPromptValue(value) {
+      const menu = state.menu;
+      if (menu === null || menu.view !== 'prompt' || menu.prompt === null) return;
+      state = { menu: { ...menu, prompt: { ...menu.prompt, value, error: null } }, feedback: state.feedback };
+      publish();
+    }
+    /** Show a validation/action failure inside the inline form. */
+    function setPromptError(error) {
+      const menu = state.menu;
+      if (menu === null || menu.view !== 'prompt' || menu.prompt === null) return;
+      state = { menu: { ...menu, prompt: { ...menu.prompt, error } }, feedback: state.feedback };
+      publish();
+    }
+
+    // -------------------------------------------------------- multi-select
+    /** Read one file-tree row into a selection entry, or null when it is not a row. */
+    function fileTreeEntry(row) {
+      if (row === null || row === undefined) return null;
+      const container = row.closest('[data-files-root]');
+      if (container === null) return null;
+      return {
+        root: container.getAttribute('data-files-root') || '',
+        path: row.getAttribute('data-files-path') || '',
+        kind: row.getAttribute('data-files-entry') || 'file'
+      };
+    }
+    /** Stable comparison key for a selection entry. */
+    function selectionKey(entry) {
+      return (entry.root + '|' + toSlashes(entry.path)).toLowerCase();
+    }
+    /** Whether one entry is currently selected. */
+    function isEntrySelected(entry) {
+      const key = selectionKey(entry);
+      return selection.some((item) => selectionKey(item) === key);
+    }
+    /** Mirror selection state onto the file-tree DOM rows. */
+    function syncSelectionDom() {
+      const rows = document.querySelectorAll('[data-files-root] li[data-files-entry][data-files-path]');
+      for (const row of rows) {
+        const entry = fileTreeEntry(row);
+        if (entry === null) continue;
+        if (isEntrySelected(entry)) row.setAttribute('data-ftcm-selected', 'true');
+        else row.removeAttribute('data-ftcm-selected');
+      }
+    }
+    /** Drop the whole multi-selection. */
+    function clearSelection() {
+      if (selection.length === 0) return;
+      selection = [];
+      selectionAnchor = null;
+      syncSelectionDom();
+      publish();
+    }
+    /** Toggle one entry with Ctrl/Cmd-click. */
+    function toggleSelection(entry) {
+      const key = selectionKey(entry);
+      if (selection.some((item) => selectionKey(item) === key)) {
+        selection = selection.filter((item) => selectionKey(item) !== key);
+      } else {
+        if (selection.length > 0 && selection[0].root.toLowerCase() !== entry.root.toLowerCase()) selection = [];
+        selection = selection.concat([entry]);
+      }
+      selectionAnchor = entry;
+      syncSelectionDom();
+      publish();
+    }
+    /** Select the visible range between the anchor and one entry with Shift-click. */
+    function selectRange(entry) {
+      const rows = Array.from(document.querySelectorAll('[data-files-root] li[data-files-entry][data-files-path]'))
+        .map((row) => fileTreeEntry(row))
+        .filter((item) => item !== null);
+      if (selectionAnchor === null || selectionAnchor.root.toLowerCase() !== entry.root.toLowerCase()) {
+        selection = [entry];
+        selectionAnchor = entry;
+        syncSelectionDom();
+        publish();
+        return;
+      }
+      const anchorIndex = rows.findIndex((item) => selectionKey(item) === selectionKey(selectionAnchor));
+      const targetIndex = rows.findIndex((item) => selectionKey(item) === selectionKey(entry));
+      if (anchorIndex < 0 || targetIndex < 0) {
+        selection = [entry];
+        selectionAnchor = entry;
+      } else {
+        const start = Math.min(anchorIndex, targetIndex);
+        const end = Math.max(anchorIndex, targetIndex);
+        selection = rows.slice(start, end + 1).filter((item) => item.kind !== 'other');
+      }
+      syncSelectionDom();
+      publish();
+    }
+    /** Keep the selection color after the tree re-renders rows. */
+    function installSelectionObserver() {
+      if (typeof MutationObserver !== 'function') return () => {};
+      let scheduled = false;
+      const observer = new MutationObserver(() => {
+        if (scheduled) return;
+        scheduled = true;
+        Promise.resolve().then(() => {
+          scheduled = false;
+          if (selection.length > 0) syncSelectionDom();
+        });
+      });
+      observer.observe(document.body, { childList: true, subtree: true });
+      return () => observer.disconnect();
     }
 
     // ------------------------------------------------------------- paths
@@ -202,6 +392,76 @@ window.__ModuleLoader__.load({
       const windows = /^[A-Za-z]:/.test(root) || root.startsWith('\\\\');
       const sep = windows ? '\\' : '/';
       return root.replace(/[\\/]+$/, '') + sep + toSlashes(path).replace(/^\/+/, '').split('/').join(sep);
+    }
+    /** Native parent directory of one absolute path. */
+    function dirnameOf(path) {
+      const index = Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'));
+      return index > 0 ? path.slice(0, index) : path;
+    }
+    /** Encode one file-address segment, keeping Windows drive colons literal. */
+    function encodeSegment(segment) {
+      return encodeURIComponent(segment).replace(/%3A/gi, ':');
+    }
+    /** Turn an absolute host path into a clickable file:// URL. */
+    function fileUrlOf(path) {
+      const normalized = toSlashes(path);
+      const encoded = normalized.split('/').map(encodeSegment).join('/');
+      if (/^[A-Za-z]:\//.test(normalized)) return 'file:///' + encoded;
+      if (normalized.startsWith('//')) return 'file:' + encoded;
+      return 'file://' + encoded;
+    }
+    /** Build a Markdown link whose target is workspace-relative when possible. */
+    function markdownLinkOf(kind, relative, absolute, label) {
+      const target = relative !== '' ? (kind === 'directory' ? relative + '/' : relative) : toSlashes(absolute);
+      const safeLabel = label.replace(/([\\\[\]])/g, '\\$1');
+      const safeTarget = target.replace(/</g, '%3C').replace(/>/g, '%3E');
+      return '[' + safeLabel + '](<' + safeTarget + '>)';
+    }
+    /** Build the Sidebar file address for the active Session, matching the file tree. */
+    function sessionFileAddressOf(root, path) {
+      if (typeof sessionId !== 'string' || sessionId === '') return undefined;
+      const absolute = toSlashes(absoluteOf(root, path));
+      const base = toSlashes(root).replace(/\/+$/, '');
+      let relative = absolute;
+      if (base !== '') {
+        if (absolute.toLowerCase() === base.toLowerCase()) relative = '';
+        else if (absolute.toLowerCase().startsWith(base.toLowerCase() + '/')) relative = absolute.slice(base.length + 1);
+      }
+      return 'dsh-resource://file/session/' + encodeURIComponent(sessionId) + '/' +
+        relative.split('/').map(encodeSegment).join('/');
+    }
+    /** Resolve a client service by name, tolerating the property form. */
+    function getClientService(name) {
+      const ctx = pluginCtx;
+      if (ctx === null) return undefined;
+      try {
+        if (typeof ctx.get === 'function') {
+          const found = ctx.get(name);
+          if (found !== undefined && found !== null) return found;
+        }
+      } catch (_error) {
+        // fall through
+      }
+      return ctx[name];
+    }
+    /** Root-relative, same-origin URL for the host file-operation route. */
+    function fileOpsUrl() {
+      return new URL('api/ftcm.fileops', document.baseURI).href;
+    }
+    /** Call the host-side create/rename/trash/terminal route. */
+    async function callFileOp(payload) {
+      const response = await fetch(fileOpsUrl(), {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      let data = null;
+      try { data = await response.json(); } catch (_error) { data = null; }
+      if (!response.ok || data === null || data.ok !== true) {
+        throw new Error(data !== null && typeof data.error === 'string' ? data.error : 'HTTP ' + response.status);
+      }
+      return data;
     }
     /**
      * The `@path` mention text, mirroring the composer file intake's
@@ -329,6 +589,129 @@ window.__ModuleLoader__.load({
       return requestOpen('reveal', { path, action: 'reveal' });
     }
 
+    /** Open the file in DSH's own document preview tab. */
+    function runPreview(root, path) {
+      const sidebar = getClientService('sidebarRight');
+      const address = sessionFileAddressOf(root, path);
+      if (sidebar === undefined || sidebar === null || address === undefined
+        || typeof sidebar.openResource !== 'function') {
+        showFeedback('preview', false, 'status.previewFailed');
+        return;
+      }
+      try {
+        sidebar.openResource(address);
+        closeMenu();
+      } catch (error) {
+        warn('openResource failed', error);
+        showFeedback('preview', false, 'status.previewFailed');
+      }
+    }
+
+    /** Open the selected folder (or a file's parent folder) in an OS terminal. */
+    async function runTerminal(root, path, isDirectory) {
+      const absolute = absoluteOf(root, path);
+      const target = isDirectory ? absolute : dirnameOf(absolute);
+      try {
+        await callFileOp({ op: 'terminal', root: root === '' ? dirnameOf(target) : root, target });
+        closeMenu();
+      } catch (error) {
+        warn('open terminal failed', error);
+        showFeedback('terminal', false, 'status.termFailed');
+      }
+    }
+
+    /** Insert the reference plus a ready-to-send AI question into the composer. */
+    function runAsk(kind, relative, mention, promptText) {
+      const actions = inputActions;
+      if (actions === null || typeof mention !== 'string' || mention === '') {
+        showFeedback('ai', false);
+        return;
+      }
+      const outcome = addToComposer(kind, relative, mention);
+      if (outcome === false) {
+        showFeedback('ai', false);
+        return;
+      }
+      try {
+        if (typeof actions.captureInsertion === 'function' && typeof actions.insertText === 'function') {
+          const span = actions.captureInsertion();
+          if (span !== undefined) actions.insertText(' ' + promptText, span);
+        }
+      } catch (error) {
+        warn('insert AI prompt failed', error);
+      }
+      closeMenu();
+    }
+
+    /** Open the inline form for create/rename/delete. */
+    function openFilePrompt(mode, root, path, kind) {
+      const absolute = absoluteOf(root, path);
+      const name = labelOf(kind, relativeOf(root, path)).replace(/\/+$/, '');
+      if (mode === 'newFile' || mode === 'newFolder') {
+        const parent = kind === 'directory' ? absolute : dirnameOf(absolute);
+        openPrompt(mode, {
+          root,
+          parentPath: parent,
+          kind,
+          title: t(mode === 'newFile' ? 'form.newFileTitle' : 'form.newFolderTitle'),
+          desc: t('menu.createIn', { name: name === '' ? root : name }),
+          busy: false
+        });
+      } else if (mode === 'rename') {
+        openPrompt('rename', { root, targetPath: absolute, kind, title: t('form.renameTitle'), desc: '', value: name, busy: false });
+      } else if (mode === 'delete') {
+        openPrompt('delete', {
+          root,
+          targetPath: absolute,
+          kind,
+          title: t('form.deleteTitle'),
+          desc: t(kind === 'directory' ? 'form.deleteFolder' : 'form.deleteFile', { name }),
+          busy: false
+        });
+      }
+    }
+
+    /** Submit the inline create/rename/delete form to the host route. */
+    async function submitPrompt() {
+      const menu = state.menu;
+      if (menu === null || menu.view !== 'prompt' || menu.prompt === null) return;
+      const prompt = menu.prompt;
+      if (prompt.busy === true) return;
+      let name = '';
+      if (prompt.mode !== 'delete') {
+        name = String(prompt.value === undefined ? '' : prompt.value).trim();
+        if (name === '') {
+          setPromptError(t('status.nameRequired'));
+          return;
+        }
+      }
+      const setBusy = (busy) => {
+        if (state.menu === null || state.menu.view !== 'prompt' || state.menu.prompt === null) return;
+        state = { menu: { ...state.menu, prompt: { ...state.menu.prompt, busy } }, feedback: state.feedback };
+        publish();
+      };
+      setBusy(true);
+      try {
+        if (prompt.mode === 'delete') {
+          await callFileOp({ op: 'trash', root: prompt.root, target: prompt.targetPath });
+        } else if (prompt.mode === 'rename') {
+          await callFileOp({ op: 'rename', root: prompt.root, target: prompt.targetPath, name });
+        } else {
+          await callFileOp({
+            op: prompt.mode === 'newFile' ? 'newFile' : 'mkdir',
+            root: prompt.root,
+            parent: prompt.parentPath,
+            name
+          });
+        }
+        clearSelection();
+        closeMenu();
+      } catch (error) {
+        setBusy(false);
+        setPromptError(String(error && error.message ? error.message : error));
+      }
+    }
+
     /** List the file's OS handlers, or null when the query fails. */
     async function queryApplications(path) {
       const session = getRemoteSession();
@@ -355,26 +738,6 @@ window.__ModuleLoader__.load({
       return requestOpen('browser', { path });
     }
 
-    /** Switch the menu to its "open with" application list. */
-    function showApplications() {
-      if (state.menu === null) return;
-      state = { menu: { ...state.menu, view: 'apps', apps: null, appsError: false }, feedback: null };
-      publish();
-      const menu = state.menu;
-      const path = absoluteOf(menu.root, menu.path);
-      queryApplications(path).then((apps) => {
-        if (state.menu === null || state.menu.view !== 'apps') return;
-        state = { menu: { ...state.menu, apps: apps === null ? [] : apps, appsError: apps === null }, feedback: null };
-        publish();
-      });
-    }
-
-    /** Return from the application list to the main menu. */
-    function showMainMenu() {
-      if (state.menu === null) return;
-      state = { menu: { ...state.menu, view: 'main', apps: null, appsError: false }, feedback: null };
-      publish();
-    }
     /**
      * Console diagnostics for the chip-insert route; keeps fallbacks explainable.
      */
@@ -472,6 +835,41 @@ window.__ModuleLoader__.load({
       }, 900);
     }
 
+    /** Add every entry of a multi-selection to the composer. */
+    function runAddMany(entries) {
+      const actions = inputActions;
+      if (actions === null || !Array.isArray(entries) || entries.length === 0) {
+        showFeedback('multiAdd', false);
+        return;
+      }
+      let chips = 0;
+      let texts = 0;
+      const failed = [];
+      for (const entry of entries) {
+        const relative = relativeOf(entry.root, entry.path);
+        const mention = mentionOf(entry.kind, relative);
+        if (mention === undefined) continue;
+        const outcome = addToComposer(entry.kind, relative, mention);
+        if (outcome === 'chip') chips += 1;
+        else if (outcome === 'text') texts += 1;
+        else failed.push(mention);
+      }
+      if (chips === 0 && texts === 0 && failed.length === 0) {
+        showFeedback('multiAdd', false);
+        return;
+      }
+      if (failed.length > 0 && typeof actions.insertText === 'function') {
+        try {
+          const span = typeof actions.captureInsertion === 'function' ? actions.captureInsertion() : undefined;
+          actions.insertText(' ' + failed.join(' ') + ' ', span);
+        } catch (error) {
+          warn('batch fallback insert failed', error);
+        }
+      }
+      clearSelection();
+      closeMenu();
+    }
+
     // --------------------------------------------------------- components
     /** Invisible bridge: captures composer InputActions and session info from standard slot props. */
     function ComposerBridge(props) {
@@ -511,10 +909,19 @@ window.__ModuleLoader__.load({
           left: Math.min(menuState.x, Math.max(margin, window.innerWidth - width - margin)),
           top: Math.min(menuState.y, Math.max(margin, window.innerHeight - height - margin))
         });
-        const first = panel !== null ? panel.querySelector('button') : null;
-        if (first !== null) first.focus();
+        const promptMode = menuState.view === 'prompt' && menuState.prompt !== null ? menuState.prompt.mode : null;
+        const input = panel !== null && promptMode !== null && promptMode !== 'delete'
+          ? panel.querySelector('input.ftcm-input')
+          : null;
+        if (input !== null) {
+          input.focus();
+          input.select();
+        } else {
+          const first = panel !== null ? panel.querySelector('button') : null;
+          if (first !== null) first.focus();
+        }
         return undefined;
-      }, [open, menuState]);
+      }, [open, menuState === null ? null : menuState.view, menuState === null || menuState.prompt === null ? null : menuState.prompt.mode]);
 
       // Close on outside pointer, Escape, resize, and scroll.
       React.useEffect(() => {
@@ -601,46 +1008,98 @@ window.__ModuleLoader__.load({
         onKeyDown
       }, children);
 
-      // Second level: every registered handler for this file, in OS preference order.
-      if (menuState.view === 'apps') {
-        const children = [item('back', '\u2190 ' + t('menu.back'), showMainMenu)];
-        if (menuState.apps === null) {
-          children.push(note('apps-loading', t('status.loading')));
-        } else if (menuState.apps.length === 0) {
-          children.push(note('apps-empty', menuState.appsError ? t('status.appsFailed') : t('status.noApps')));
-        } else {
-          for (const app of menuState.apps) {
-            if (app === null || typeof app !== 'object' || typeof app.id !== 'string' || app.id === '') continue;
-            const name = typeof app.name === 'string' && app.name !== '' ? app.name : app.id;
-            const key = 'app:' + app.id;
-            children.push(item(key, name, () => requestOpen(key, { path: absolute, application: app.id }), {
-              icon: typeof app.icon === 'string' ? app.icon : undefined,
-              hint: app.default === true ? t('menu.defaultApp') : undefined
-            }));
-          }
+      // Inline create/rename/delete confirmation form.
+      if (menuState.view === 'prompt') {
+        const prompt = menuState.prompt;
+        if (prompt === null) return null;
+        const submit = (event) => {
+          if (event !== undefined && event !== null) event.preventDefault();
+          void submitPrompt();
+        };
+        const fields = [h('div', { key: 'title', className: 'ftcm-form-title' }, prompt.title)];
+        if (typeof prompt.desc === 'string' && prompt.desc !== '') {
+          fields.push(h('div', { key: 'desc', className: 'ftcm-form-desc' }, prompt.desc));
         }
-        return panel(children);
+        if (prompt.mode !== 'delete') {
+          fields.push(h('input', {
+            key: 'input',
+            className: 'ftcm-input',
+            value: prompt.value === undefined ? '' : prompt.value,
+            placeholder: t('form.namePlaceholder'),
+            onChange: (event) => setPromptValue(event.target.value),
+            onKeyDown: (event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault();
+                void submitPrompt();
+              }
+            }
+          }));
+        }
+        if (typeof prompt.error === 'string' && prompt.error !== '') {
+          fields.push(h('div', { key: 'error', className: 'ftcm-form-error' }, prompt.error));
+        }
+        fields.push(h('div', { key: 'actions', className: 'ftcm-form-actions' }, [
+          h('button', { key: 'cancel', type: 'button', className: 'ftcm-btn', disabled: prompt.busy === true, onClick: closeMenu }, t('form.cancel')),
+          h('button', { key: 'ok', type: 'submit', className: 'ftcm-btn ' + (prompt.mode === 'delete' ? 'ftcm-btn-danger' : 'ftcm-btn-primary'), disabled: prompt.busy === true }, prompt.mode === 'delete' ? t('form.deleteTitle') : t('form.confirm'))
+        ]));
+        return panel([h('form', { key: 'form', className: 'ftcm-form', onSubmit: submit }, fields)]);
+      }
+
+      // Multi-selection menu: batch add and copy actions.
+      if (Array.isArray(menuState.multi) && menuState.multi.length > 1) {
+        const entries = menuState.multi;
+        const count = entries.length;
+        const mentions = entries
+          .map((entry) => mentionOf(entry.kind, relativeOf(entry.root, entry.path)))
+          .filter((mention) => mention !== undefined);
+        return panel([
+          note('multi-count', t('menu.selectedCount', { count })),
+          item('multiAdd', t('menu.addSelected', { count }), () => runAddMany(entries)),
+          item('multiCopy', t('menu.copySelected'), () => runCopy('multiCopy', entries.map((entry) => absoluteOf(entry.root, entry.path)).join('\n'))),
+          item('multiMention', t('menu.copyMention'), () => runCopy('multiMention', mentions.join(' '))),
+          h('div', { key: 'sep-multi', role: 'separator', className: 'ftcm-sep' }),
+          item('clearSelection', t('menu.clearSelection'), () => { clearSelection(); closeMenu(); })
+        ]);
       }
 
       const children = [
         item('add', t('menu.add'), () => runAdd(kind, relative, mention)),
         item('mention', t('menu.copyMention'), () => runCopy('mention', mention))
       ];
+
+      // AI actions need a valid file mention, so folders are excluded.
+      if (!isDirectory && mention !== undefined) {
+        children.push(h('div', { key: 'sep-ai', role: 'separator', className: 'ftcm-sep' }));
+        children.push(item('aiSummary', t('menu.aiSummary'), () => runAsk(kind, relative, mention, t('ai.summaryPrompt'))));
+        children.push(item('aiExplain', t('menu.aiExplain'), () => runAsk(kind, relative, mention, t('ai.explainPrompt'))));
+      }
+
       if (canUseDesktop) {
         children.push(h('div', { key: 'sep-open', role: 'separator', className: 'ftcm-sep' }));
+        if (!isDirectory) {
+          children.push(item('preview', t('menu.preview'), () => runPreview(menuState.root, menuState.path)));
+        }
         children.push(item('open', isDirectory ? t('menu.openFolder') : t('menu.open'), () => runOpen(absolute)));
         children.push(item('reveal', t('menu.reveal'), () => runReveal(absolute)));
         if (browserFile) {
           children.push(item('browser', t('menu.browser'), () => runBrowserOpen(absolute)));
         }
-        if (!isDirectory) {
-          children.push(item('openWith', t('menu.openWith'), showApplications));
-        }
+        children.push(item('terminal', isDirectory ? t('menu.terminal') : t('menu.terminalHere'), () => runTerminal(menuState.root, menuState.path, isDirectory)));
       }
+
+      children.push(h('div', { key: 'sep-file', role: 'separator', className: 'ftcm-sep' }));
+      children.push(item('newFile', t('menu.newFile'), () => openFilePrompt('newFile', menuState.root, menuState.path, kind)));
+      children.push(item('newFolder', t('menu.newFolder'), () => openFilePrompt('newFolder', menuState.root, menuState.path, kind)));
+      children.push(item('rename', t('menu.rename'), () => openFilePrompt('rename', menuState.root, menuState.path, kind)));
+      children.push(item('delete', t('menu.delete'), () => openFilePrompt('delete', menuState.root, menuState.path, kind)));
+
       children.push(h('div', { key: 'sep-copy', role: 'separator', className: 'ftcm-sep' }));
+      children.push(item('fileUrl', t('menu.copyFileUrl'), () => runCopy('fileUrl', fileUrlOf(absolute))));
+      children.push(item('markdown', t('menu.copyMarkdown'), () => runCopy('markdown', markdownLinkOf(kind, relative, absolute, displayName))));
       children.push(item('absolute', t('menu.copyAbsolute'), () => runCopy('absolute', absolute)));
       children.push(item('relative', t('menu.copyRelative'), () => runCopy('relative', relative)));
       children.push(item('name', t('menu.copyName'), () => runCopy('name', displayName)));
+      return panel(children);
       return panel(children);
     }
 
@@ -716,17 +1175,57 @@ window.__ModuleLoader__.load({
         if (hit === null) return;
         event.preventDefault();
         event.stopPropagation();
+        let multi;
+        const row = target.closest('li[data-files-entry][data-files-path]');
+        if (row !== null) {
+          const entry = fileTreeEntry(row);
+          if (entry !== null && selection.length > 1 && isEntrySelected(entry)) multi = selection.slice();
+          else if (selection.length > 0) clearSelection();
+        }
         openMenu({
           x: event.clientX,
           y: event.clientY,
           root: hit.root,
           path: hit.path,
-          kind: hit.kind
+          kind: hit.kind,
+          multi
         });
       };
       document.addEventListener('contextmenu', onContextMenu, true);
       ctx.effect(() => () => document.removeEventListener('contextmenu', onContextMenu, true),
         'file-tree-context-menu: listener');
+
+      // Ctrl/Cmd-click toggles, Shift-click selects a visible range. A plain
+      // click anywhere clears the selection and keeps the tree's own behavior.
+      const onRowClick = (event) => {
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        if (target.closest('.ftcm-panel') !== null) return;
+        const row = target.closest('li[data-files-entry][data-files-path]');
+        if (row === null) {
+          if (selection.length > 0) clearSelection();
+          return;
+        }
+        const entry = fileTreeEntry(row);
+        if (entry === null) return;
+        if (event.ctrlKey || event.metaKey) {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleSelection(entry);
+          return;
+        }
+        if (event.shiftKey) {
+          event.preventDefault();
+          event.stopPropagation();
+          selectRange(entry);
+          return;
+        }
+        if (selection.length > 0) clearSelection();
+      };
+      document.addEventListener('click', onRowClick, true);
+      ctx.effect(() => () => document.removeEventListener('click', onRowClick, true),
+        'file-tree-context-menu: selection click');
+      ctx.effect(installSelectionObserver, 'file-tree-context-menu: selection observer');
 
       // Invisible bridges that capture the composer's InputActions from the
       // standard provide channel, from the file tab and from the composer row.
@@ -736,6 +1235,6 @@ window.__ModuleLoader__.load({
       ctx.slots.inject('shell.overlay', registration('shell.overlay', FileTreeContextMenu, 60));
     }
 
-    return { inject: ['slots', 'locale', 'remote', 'remote.session'], apply };
+    return { inject: ['slots', 'locale', 'remote', 'remote.session', 'sidebarRight'], apply };
   }
 });

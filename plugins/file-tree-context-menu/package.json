@@ -1,7 +1,7 @@
 {
   "name": "@local/file-tree-context-menu",
-  "version": "1.2.0",
-  "description": "Right-click files or folders in the workspace file tree and deliverable lists to add them to the conversation, copy paths, open them with the default app or a browser, or reveal them in the file manager.",
+  "version": "1.0.0",
+  "description": "Right-click files or folders in the workspace file tree and deliverable lists to add them to the conversation, copy paths/links, preview in DSH, open in a terminal, summarize with AI, create/rename/delete entries, or reveal them in the file manager.",
   "private": true,
   "type": "module",
   "author": "Mark930209 <guimaxingtian@163.com>",
@@ -17,7 +17,16 @@
     "workspace",
     "open-in-app",
     "reveal",
-    "browser"
+    "browser",
+    "preview",
+    "terminal",
+    "new-file",
+    "new-folder",
+    "rename",
+    "delete",
+    "recycle-bin",
+    "multi-select",
+    "ai"
   ],
   "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/file-tree-context-menu",
   "repository": {
@@ -54,6 +63,7 @@
         "@deepseek-ai/dsh-api-session-controller",
         "@deepseek-ai/dsh-client-ui-sidebar-files",
         "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
         "@deepseek-ai/dsh-client-locale"
       ]
     }

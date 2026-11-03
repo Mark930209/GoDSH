@@ -165,3 +165,52 @@ await ctx.remote.session.openWorkspacePath({ path: absolute, application: app.id
 `package.json` 的 `dsh.client.inject` 需同时声明 `@deepseek-ai/dsh-api-gateway`、
 `@deepseek-ai/dsh-api-remotes`、`@deepseek-ai/dsh-api-session-controller`，否则回退到 `ctx.remote`
 可能尚未就绪（看到 `ctx.remote` 为空就查这里）。
+
+> 「打开方式…」二级菜单已从本仓库插件移除（用户不需要），但上面的 `workspacePathApplications`
+> API 仍可用于其他插件；本插件只保留「用浏览器打开」时对浏览器的自动选择。
+
+## 9. 在 DSH 右侧面板中预览文件
+
+文件树里的「在 DSH 中预览」使用公开的 Sidebar 服务，不要自己造 tab：
+
+```js
+// factory 的 inject 必须带 sidebarRight，并依赖 @deepseek-ai/dsh-client-ui-sidebar-right
+const address = 'dsh-resource://file/session/' + encodeURIComponent(sessionId) + '/' +
+  relativePath.split('/').map((s) => encodeURIComponent(s).replace(/%3A/gi, ':')).join('/');
+ctx.sidebarRight.openResource(address);
+```
+
+- `sessionId` 从 slot props 捕获；路径相对该 Session 的 `cwd`。
+- 绝对路径或工作区外路径也可以直接放进地址，Sidebar 会按 Session 解析。
+- 参考实现见 `@deepseek-ai/dsh-client-ui-reference` 的 `fileAddressFor` / `sessionFileAddress`。
+
+## 10. Host 自定义文件操作 / 终端
+
+Client 渲染进程没有任意文件写、重命名、删除权限；需要时在 Host 半部注册认证路由：
+
+```js
+export const inject = ['connection'];
+export function apply(ctx) {
+  ctx.effect(() => ctx.connection.fetch.register({
+    path: '/api/ftcm.fileops',
+    methods: ['POST'],
+    requestBody: 'buffered',
+    fetch: (request) => handle(request)
+  }), 'my-plugin: host file operations');
+}
+```
+
+- 请求体用 `await request.json()`；响应统一 `Response.json({ ok, error }, { status })`。
+- 所有目标路径必须用 `path.relative(root, target)` 校验在传入的工作区根目录内，拒绝 `..` 越权。
+- 新建：`fs.mkdir` / `fs.writeFile(target, '', { flag: 'wx' })`；重命名：`fs.rename`（目标已存在返回 409）。
+- 删除到 Windows 回收站：
+  `Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile/DeleteDirectory(path, 'OnlyErrorDialogs', 'SendToRecycleBin')`。
+- 外部终端：Host 用 `spawn('cmd.exe', ['/d','/s','/c', 'start "" powershell.exe -NoExit -Command "Set-Location -LiteralPath $env:DSH_FTCM_DIR"'], { env: { ...process.env, DSH_FTCM_DIR: target }, detached: true, stdio: 'ignore' })`，
+  路径通过环境变量传入，避免命令拼接注入。
+- 纯 Web / 非 Windows 环境必须返回明确错误，Client 显示失败反馈。
+
+## 11. 版本与发版策略
+
+**只有用户明确说「发版 / release / 升版本」时才执行 bump、tag、Release 与市场索引刷新。**
+日常改代码只提交，不自动发版；当前本仓库插件统一为 **1.0.0**，旧的 1.1.0 / 1.2.0 编号已废弃。
+需要发版时仍用 `node scripts\release.mjs <name> patch|minor|major "摘要" [--push]`。
