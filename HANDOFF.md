@@ -112,7 +112,11 @@ GoDSH/
   - 不 import 任何 `@deepseek-ai/*`：`inject = ['agents']`，续跑消息按 `createUserMessage` 的
     形状（`{id, role:'user', content, source}` + 深冻结）自行构造，避免跨 bundle 解析问题。
   - 测试：`test/auto-retry.test.mjs` 用假 Cordis 上下文重放真实事件负载，**11 项全部通过**。
-  - 已 `install_bundle` → `application: applied`，`Config.listConfigs` 可见行 `auto-retry`。
+  - 已 `install_bundle` → `application: applied`；`list_bundles` 显示 `installed/enabled: true`，
+    `list_plugins` 行 `include:auto-retry` 为 **`fiberPhase: active`**（运行时已加载）。
+  - **未发布**：用户 2026-11-03 明确「先安装，先都不发布」→ 未 bump、未打 tag、未建 Release、
+    未刷新市场索引（索引仍只有 file-tree-context-menu 1.0.0）。发版需用户再次明确要求；
+    注意推 tag 会让 CI 重建整个索引，届时 `composer-skill-picker` 也会被一并收录。
 - [x] **`validate-plugins.mjs` 修正**：`client.js` 改为**仅当 `dsh.client` 已声明时**才必需，
   使 Host-only bundle 能通过校验（此前硬性要求 client.js，auto-retry 首次校验即失败）。
 
