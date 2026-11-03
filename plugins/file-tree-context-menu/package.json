@@ -1,6 +1,6 @@
 {
   "name": "@local/file-tree-context-menu",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Right-click files or folders in the workspace file tree and deliverable lists to add them to the conversation, copy paths, open them with the default app or a browser, or reveal them in the file manager.",
   "private": true,
   "type": "module",
@@ -34,9 +34,17 @@
     "./locale/*.json": "./locale/*.json",
     "./icon": "./icon.svg"
   },
-  "files": ["index.js", "client.js", "cordis.patch.yml", "locale/*.json", "icon.svg"],
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
   "dsh": {
-    "bundle": { "patch": "./cordis.patch.yml" },
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "platform": "web",
       "immediately": true,
