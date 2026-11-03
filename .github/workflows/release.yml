@@ -53,7 +53,13 @@ jobs:
 
       - name: Refresh market index
         run: |
-          node scripts/make-market-index.mjs --commit "$GITHUB_SHA"
+          # The tag commit may be behind main (docs/HANDOFF commits land after a
+          # local release), so refresh the index on top of the latest main instead
+          # of pushing the detached tag commit over it.
+          git fetch origin main
+          git checkout -B main origin/main
+          tag_sha="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
+          node scripts/make-market-index.mjs --commit "$tag_sha"
           if git diff --quiet -- docs/market-index.json; then
             echo "市场索引无变化"
             exit 0
