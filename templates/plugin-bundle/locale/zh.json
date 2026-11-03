@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "示例插件 __PLUGIN__",
+    "description": "从 templates/plugin-bundle 生成的示例插件，发布前请修改标题与描述。"
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Example Plugin __PLUGIN__",
+    "description": "Scaffolded from templates/plugin-bundle; replace this title and description before publishing."
+  }
+}

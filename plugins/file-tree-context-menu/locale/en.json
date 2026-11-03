@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "File Tree Context Menu",
+    "description": "Right-click files or folders in the workspace file tree and deliverable lists to copy absolute/relative paths, copy an @-mention, or add them to the conversation."
+  }
+}

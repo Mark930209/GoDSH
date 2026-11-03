@@ -1,0 +1,26 @@
+{
+  "name": "@local/__PLUGIN__",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "A DeepSeek Harness bundle scaffolded from templates/plugin-bundle.",
+  "license": "MIT",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": ["index.js", "client.js", "cordis.patch.yml", "locale/*.json", "icon.svg"],
+  "scripts": {
+    "check": "node --check client.js && node --check index.js"
+  },
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": ["@deepseek-ai/dsh-client-locale"]
+    }
+  }
+}

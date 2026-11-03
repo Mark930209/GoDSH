@@ -1,0 +1,3 @@
+- insert:
+    - id: __PLUGIN__
+      name: '@local/__PLUGIN__'

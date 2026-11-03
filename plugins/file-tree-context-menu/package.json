@@ -1,0 +1,47 @@
+{
+  "name": "@local/file-tree-context-menu",
+  "version": "1.1.0",
+  "description": "Right-click files or folders in the workspace file tree and deliverable lists to copy absolute/relative paths, copy an @-mention, or add them to the conversation.",
+  "private": true,
+  "type": "module",
+  "author": "congzhisen",
+  "license": "MIT",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "bundle",
+    "context-menu",
+    "file-tree",
+    "mention",
+    "workspace"
+  ],
+  "homepage": "https://github.com/congzhisen/dsh-plugins/tree/main/plugins/file-tree-context-menu",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/congzhisen/dsh-plugins.git",
+    "directory": "plugins/file-tree-context-menu"
+  },
+  "scripts": {
+    "check": "node --check client.js && node --check index.js"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": ["index.js", "client.js", "cordis.patch.yml", "locale/*.json", "icon.svg"],
+  "dsh": {
+    "bundle": { "patch": "./cordis.patch.yml" },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": [
+        "@deepseek-ai/dsh-client-ui-sidebar-files",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-client-locale"
+      ]
+    }
+  }
+}
