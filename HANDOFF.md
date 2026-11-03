@@ -1,6 +1,6 @@
 # HANDOFF · 交接文档
 
-> 快照时间：2026-11-03（最新提交 `ac50d34`）· 维护者：Mark930209 `<guimaxingtian@163.com>`
+> 快照时间：2026-11-03 · 维护者：Mark930209 `<guimaxingtian@163.com>`
 > 打开本目录后：先读本文 → 再读 [docs/plugin-dev-guide.md](docs/plugin-dev-guide.md)。
 
 ---
@@ -12,7 +12,7 @@ git 身份已设为 `Mark930209 / guimaxingtian@163.com`，`origin` 已指向该
 新增 **CI 校验 / tag 发版 / Pages 部署** 三套工作流与 `scripts/release.mjs`、`scripts/validate-plugins.mjs`。
 现有插件 `file-tree-context-menu` **v1.2.0** 已在 `desktop` profile 安装并启用（`link:` 指向本仓库）。
 v1.2.0 新增「用默认应用打开 / 在文件夹中显示 / 用浏览器打开 / 打开方式… / 复制名称」，
-本地 tag `file-tree-context-menu-v1.2.0` 已创建（**待人工验证后再 push**）。
+已推送并发布 GitHub Release（tag `file-tree-context-menu-v1.2.0`），公开市场索引已收录 1.2.0。
 
 **待人工验证**：重启 DeepSeek Harness 后，检查蓝色引用芯片与 v1.2.0 的本机打开菜单（见 §4.1）。
 GitHub Pages 已启用并部署成功，公开市场索引：`https://mark930209.github.io/GoDSH/market-index.json`。
@@ -70,6 +70,10 @@ GoDSH/
 - [x] **v1.2.0 菜单扩展**：复用核心 Session Remote `openWorkspacePath` / `workspacePathApplications`，
   新增「用默认应用打开、在文件夹中显示、用浏览器打开（html/svg 自动挑浏览器）、打开方式…（应用图标+默认标记）、复制名称」；
   纯 Web 部署自动隐藏本机打开分组。`node --check` 与 `validate-plugins.mjs` 通过。
+- [x] **v1.2.0 已发布**：GitHub Release 创建成功，公开索引
+  `https://mark930209.github.io/GoDSH/market-index.json` 已收录 1.2.0。
+- [x] **release.yml 修复**：tag 提交可能落后 main，刷新索引改为先 `git checkout -B main origin/main`
+  再生成并推送，避免 `HEAD:main` 非快进失败（v1.2.0 首次运行即在此步骤失败，已修复，后续发版正常）。
 
 ## 4. 待办（按优先级）
 
@@ -78,8 +82,7 @@ GoDSH/
    - 是否出现「用默认应用打开 / 在文件夹中显示 / 打开方式…」；HTML 另有「用浏览器打开」；
    - 「在文件夹中显示」是否在资源管理器定位选中；HTML「用浏览器打开」是否进浏览器；
    - 「打开方式…」是否列出应用（带图标/默认标记）并能打开。
-   任一项失败：DevTools 看 `[file-tree-context-menu]` 警告并反馈。验证通过后执行
-   `git push origin HEAD --follow-tags` 触发 CI 发布与索引刷新。
+   任一项失败：DevTools 看 `[file-tree-context-menu]` 警告并反馈；必要时发 `v1.2.1` 修复。
 2. 计划下一个插件时：`node scripts\new-plugin.mjs <name>` → 开发 → `node scripts\validate-plugins.mjs --plugin <name>`。
 3. 可选：如需把 GitHub 身份设为全局，执行
    `git config --global user.name "Mark930209"` 与 `git config --global user.email "guimaxingtian@163.com"`。
