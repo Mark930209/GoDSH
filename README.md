@@ -39,6 +39,12 @@ node scripts/new-plugin.mjs dsh-my-plugin
 node scripts/make-market-index.mjs --git-url https://github.com/<你>/dsh-plugins
 ```
 
+## 插件清单
+
+| 插件 | 版本 | 说明 |
+|---|---|---|
+| [file-tree-context-menu](plugins/file-tree-context-menu/) | 1.1.0 | 工作区文件树 / 交付物列表右键：加入对话（引用芯片）、复制 @ 引用、复制绝对/相对路径 |
+
 ## 关键约定
 
 - **改完代码要重启 DeepSeek Harness** 才生效（插件以 `link:` 方式安装，读的是本仓库目录）。

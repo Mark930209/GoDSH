@@ -9,7 +9,8 @@
 
 多插件仓库 `DSH_Plugins_Dev` 已建好；原有插件 `file-tree-context-menu` **v1.1.0** 已迁入
 `plugins/file-tree-context-menu` 并以新路径重装（profile 的 `link:` 已更新为 `E:\Projects\DSH_Plugins_Dev\plugins\file-tree-context-menu`）。
-仓库已 `git init`（本地 1 次提交 + tag），**尚未推送到 GitHub**。
+仓库已 `git init` 并提交（`ed3a315` 源码 + `b289d36` 索引），已打 tag `file-tree-context-menu-v1.1.0`；
+**尚未推送到 GitHub**。`.recovery/`（日志与恢复脚本）已删除，不入库。
 
 **唯一待人工验证**：重启 DeepSeek Harness 后，右键「加入对话」是否出现**蓝色引用芯片**（用户此前反馈白色文字，
 判断为旧版模块未加载；v1.1.0 已含芯片插入与「已插入文本」回退提示）。
