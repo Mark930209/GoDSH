@@ -1,6 +1,6 @@
 # HANDOFF · 交接文档
 
-> 快照时间：2026-11-03（最新提交 `62dbe79`）· 维护者：Mark930209 `<guimaxingtian@163.com>`
+> 快照时间：2026-11-03（最新提交 `ac50d34`）· 维护者：Mark930209 `<guimaxingtian@163.com>`
 > 打开本目录后：先读本文 → 再读 [docs/plugin-dev-guide.md](docs/plugin-dev-guide.md)。
 
 ---
@@ -10,9 +10,11 @@
 多插件仓库 **GoDSH**（<https://github.com/Mark930209/GoDSH>）已完成 GitHub 化：
 git 身份已设为 `Mark930209 / guimaxingtian@163.com`，`origin` 已指向该仓库并已推送；
 新增 **CI 校验 / tag 发版 / Pages 部署** 三套工作流与 `scripts/release.mjs`、`scripts/validate-plugins.mjs`。
-现有插件 `file-tree-context-menu` **v1.1.0** 已在 `desktop` profile 安装并启用（`link:` 指向本仓库）。
+现有插件 `file-tree-context-menu` **v1.2.0** 已在 `desktop` profile 安装并启用（`link:` 指向本仓库）。
+v1.2.0 新增「用默认应用打开 / 在文件夹中显示 / 用浏览器打开 / 打开方式… / 复制名称」，
+本地 tag `file-tree-context-menu-v1.2.0` 已创建（**待人工验证后再 push**）。
 
-**唯一待人工验证**：重启 DeepSeek Harness 后，右键「加入对话」是否出现**蓝色引用芯片**（见 §4.1）。
+**待人工验证**：重启 DeepSeek Harness 后，检查蓝色引用芯片与 v1.2.0 的本机打开菜单（见 §4.1）。
 GitHub Pages 已启用并部署成功，公开市场索引：`https://mark930209.github.io/GoDSH/market-index.json`。
 
 ---
@@ -43,8 +45,8 @@ GoDSH/
 │         market-index.json, examples/)
 ├─ scripts/ (validate-plugins.mjs, new-plugin.mjs, release.mjs, make-market-index.mjs)
 ├─ templates/plugin-bundle/ (最小可运行模板)
-└─ plugins/file-tree-context-menu/   ← v1.1.0
-   client.js(511行) index.js package.json(1.1.0) cordis.patch.yml icon.svg
+└─ plugins/file-tree-context-menu/   ← v1.2.0
+   client.js index.js package.json(1.2.0) cordis.patch.yml icon.svg
    locale/{zh,en}.json README.md CHANGELOG.md LICENSE .gitignore .gitattributes
 ```
 
@@ -65,11 +67,19 @@ GoDSH/
 - [x] **GitHub Pages 已启用**（build type = GitHub Actions），`pages.yml` 部署成功；索引公开可访问
   `https://mark930209.github.io/GoDSH/market-index.json`（format 1，1 个插件）。
 - [x] CI 首次跑通：`Validate plugins` 推送即成功；`Deploy market index` 手动 dispatch 成功。
+- [x] **v1.2.0 菜单扩展**：复用核心 Session Remote `openWorkspacePath` / `workspacePathApplications`，
+  新增「用默认应用打开、在文件夹中显示、用浏览器打开（html/svg 自动挑浏览器）、打开方式…（应用图标+默认标记）、复制名称」；
+  纯 Web 部署自动隐藏本机打开分组。`node --check` 与 `validate-plugins.mjs` 通过。
 
 ## 4. 待办（按优先级）
 
-1. **验证芯片**：完全退出 DSH 桌面端（含托盘）→ 重启 → 右键文件「加入对话」。
-   出蓝色芯片 = 通过；出「已插入文本（非芯片）」或「操作失败」= 打开 DevTools 看 `[file-tree-context-menu]` 警告并反馈。
+1. **验证 v1.2.0**：完全退出 DSH 桌面端（含托盘）→ 重启 → 右键文件检查：
+   - 「加入对话」是否出现**蓝色引用芯片**（旧验证项）；
+   - 是否出现「用默认应用打开 / 在文件夹中显示 / 打开方式…」；HTML 另有「用浏览器打开」；
+   - 「在文件夹中显示」是否在资源管理器定位选中；HTML「用浏览器打开」是否进浏览器；
+   - 「打开方式…」是否列出应用（带图标/默认标记）并能打开。
+   任一项失败：DevTools 看 `[file-tree-context-menu]` 警告并反馈。验证通过后执行
+   `git push origin HEAD --follow-tags` 触发 CI 发布与索引刷新。
 2. 计划下一个插件时：`node scripts\new-plugin.mjs <name>` → 开发 → `node scripts\validate-plugins.mjs --plugin <name>`。
 3. 可选：如需把 GitHub 身份设为全局，执行
    `git config --global user.name "Mark930209"` 与 `git config --global user.email "guimaxingtian@163.com"`。
