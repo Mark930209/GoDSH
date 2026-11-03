@@ -41,9 +41,10 @@ git add docs/market-index.json && git commit -m "chore: refresh market index" &&
 
 - 脚本扫描 `plugins/*`，每个插件一条，git 源自动带 `path: plugins/<name>`。
 - 索引地址（GitHub Pages）：`https://mark930209.github.io/GoDSH/market-index.json`
-- **首次需在 GitHub 开启 Pages**：仓库 **Settings → Pages → Build and deployment →
-  Source 选 `GitHub Actions`**（随后 `.github/workflows/pages.yml` 会在 `docs/` 变更时自动部署）。
-  也可选 `Deploy from a branch → main /docs`，两种任选其一，别同时用。
+- **GitHub Pages 已启用**（Build and deployment → Source = **GitHub Actions**）。
+  `.github/workflows/pages.yml` 会在 `docs/` 变更时自动部署。
+  索引地址：`https://mark930209.github.io/GoDSH/market-index.json`（已实测 200）。
+  如要改成分支部署：Settings → Pages 选 `main /docs` 并停用该工作流，二者勿同时使用。
 - 用户侧：启用 `@deepseek-ai/dsh-experimental-plugin-market-bundle` → 添加索引 URL → Discover 安装。
 
 ## 四、自动发布（推荐）

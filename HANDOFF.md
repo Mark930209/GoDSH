@@ -13,7 +13,7 @@ git 身份已设为 `Mark930209 / guimaxingtian@163.com`，`origin` 已指向该
 现有插件 `file-tree-context-menu` **v1.1.0** 已在 `desktop` profile 安装并启用（`link:` 指向本仓库）。
 
 **唯一待人工验证**：重启 DeepSeek Harness 后，右键「加入对话」是否出现**蓝色引用芯片**（见 §4.1）。
-**首次需人工开启 GitHub Pages**（Settings → Pages → Source: GitHub Actions），见 §4.2。
+GitHub Pages 已启用并部署成功，公开市场索引：`https://mark930209.github.io/GoDSH/market-index.json`。
 
 ---
 
@@ -61,15 +61,16 @@ GoDSH/
 - [x] **右键菜单插件启用**：desktop profile 的 `bundles` 含 `@local/file-tree-context-menu`，
   `node_modules/@local/file-tree-context-menu` 为符号链接 → 本仓库插件目录；`node --check` 通过。
 - [x] 市场索引已按新仓库重新生成（`docs/market-index.json`）。
+- [x] **GitHub Pages 已启用**（build type = GitHub Actions），`pages.yml` 部署成功；索引公开可访问
+  `https://mark930209.github.io/GoDSH/market-index.json`（format 1，1 个插件）。
+- [x] CI 首次跑通：`Validate plugins` 推送即成功；`Deploy market index` 手动 dispatch 成功。
 
 ## 4. 待办（按优先级）
 
 1. **验证芯片**：完全退出 DSH 桌面端（含托盘）→ 重启 → 右键文件「加入对话」。
    出蓝色芯片 = 通过；出「已插入文本（非芯片）」或「操作失败」= 打开 DevTools 看 `[file-tree-context-menu]` 警告并反馈。
-2. **开启 GitHub Pages**（首次一次性）：Settings → Pages → Build and deployment → Source 选 **GitHub Actions**。
-   之后索引地址 = `https://mark930209.github.io/GoDSH/market-index.json`（Pages 主机名是小写用户名）。
-3. 计划下一个插件时：`node scripts\new-plugin.mjs <name>` → 开发 → `node scripts\validate-plugins.mjs --plugin <name>`。
-4. 可选：如需把 GitHub 身份设为全局，执行
+2. 计划下一个插件时：`node scripts\new-plugin.mjs <name>` → 开发 → `node scripts\validate-plugins.mjs --plugin <name>`。
+3. 可选：如需把 GitHub 身份设为全局，执行
    `git config --global user.name "Mark930209"` 与 `git config --global user.email "guimaxingtian@163.com"`。
 
 ## 5. 常用命令
