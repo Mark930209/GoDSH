@@ -1,6 +1,6 @@
 # HANDOFF · 交接文档
 
-> 快照时间：2026-11-03 · 维护者：Mark930209 `<guimaxingtian@163.com>`
+> 快照时间：2026-11-03（最新提交 `62dbe79`）· 维护者：Mark930209 `<guimaxingtian@163.com>`
 > 打开本目录后：先读本文 → 再读 [docs/plugin-dev-guide.md](docs/plugin-dev-guide.md)。
 
 ---
@@ -21,7 +21,8 @@ GitHub Pages 已启用并部署成功，公开市场索引：`https://mark930209
 
 | 项 | 值 |
 |---|---|
-| 远程仓库 | `https://github.com/Mark930209/GoDSH`（`origin`，分支 `main`） |
+| 远程仓库 | `https://github.com/Mark930209/GoDSH`（`origin`，分支 `main`；fetch 走 HTTPS，push 走 SSH） |
+| GitHub 认证 | SSH key `C:\Users\congzhisen\.ssh\github_guima`（`~/.ssh/config` 已配 `Host github.com`）；HTTPS PAT 存于 Windows 凭据管理器 |
 | 本仓库 | `E:\Projects\DSH_Plugins_Dev` |
 | git 身份（本仓库 local） | `Mark930209` / `guimaxingtian@163.com` |
 | DSH 安装目录 | `E:\Users\congzhisen\AppData\Local\Programs\DeepSeek Harness` |
