@@ -51,8 +51,13 @@ if (dryRun) {
 }
 
 // 1) 版本 bump（不自动打 tag，由脚本统一打带前缀的 tag）
-execFileSync(process.platform === 'win32' ? 'npm.cmd' : 'npm',
-  ['version', bump, '--no-git-tag-version', '--allow-same-version'], { cwd: pluginDir, stdio: 'inherit' });
+// Windows 下 npm 是 .cmd，Node 24 的 execFileSync 直接 spawn 会 EINVAL，统一走 cmd.exe。
+const npmArgs = ['version', bump, '--no-git-tag-version', '--allow-same-version'];
+if (process.platform === 'win32') {
+  execFileSync('cmd.exe', ['/d', '/s', '/c', 'npm ' + npmArgs.join(' ')], { cwd: pluginDir, stdio: 'inherit' });
+} else {
+  execFileSync('npm', npmArgs, { cwd: pluginDir, stdio: 'inherit' });
+}
 const version = JSON.parse(readFileSync(pkgPath, 'utf8')).version;
 if (version === before) fail('版本未变化，中止');
 
