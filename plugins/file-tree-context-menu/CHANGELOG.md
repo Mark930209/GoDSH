@@ -5,6 +5,23 @@
 
 ## [Unreleased]
 
+## [1.2.0] - 2026-11-03
+
+### Added
+
+- 右键菜单新增**本机打开**能力（复用核心 Session Remote `openWorkspacePath` / `workspacePathApplications`）：
+  - 「用默认应用打开」：文件交给系统默认程序，HTML 等网页文件即默认浏览器；文件夹在文件管理器中打开。
+  - 「在文件夹中显示」：在资源管理器中定位并选中目标文件/文件夹。
+  - 「用浏览器打开」：对 `html/htm/xhtml/shtml/svg` 自动从系统文件关联中挑选 Chrome / Edge / Firefox 等浏览器。
+  - 「打开方式…」二级菜单：列出该文件的全部已注册应用，带应用图标与「默认」标记。
+- 新增「复制名称」。
+- 纯 Web 部署（`canOpenWorkspacePath()` 返回 false）自动隐藏本机打开分组，不误导用户。
+
+### Changed
+
+- `package.json` 的 `dsh.client.inject` 增加 `dsh-api-gateway` / `dsh-api-remotes` / `dsh-api-session-controller`，保证 Remote 服务就绪。
+- 菜单样式微调：支持应用图标、右侧提示、超长列表滚动与更稳健的视口定位。
+
 ## [1.1.0] - 2026-11-03
 
 ### Added

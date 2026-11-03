@@ -136,3 +136,32 @@ actions.insertText('@相对路径', span);
 - [ ] 三种复制都成功（有「已复制」反馈）
 - [ ] 交付物三面（卡片 / 改动卡片 / 审阅页）都能右键
 - [ ] 中英切换文案正确；暗/亮主题颜色正常
+
+## 8. 本机打开 / 在文件夹中显示（复用 open-in-app）
+
+**不要自己拼 `explorer /select` 或 `start` 命令**。核心已把「用哪个应用打开、在文件管理器中定位」
+封装成 Session Remote，浏览器插件直接调用即可（v1.2.0 起本仓库插件已用）：
+
+```js
+// factory 返回的 inject 必须带这两个服务
+return { inject: ['slots', 'locale', 'remote', 'remote.session'], apply };
+
+// 能力探测（纯 Web 部署为 false，应该隐藏相关菜单）
+const ok = (await ctx.remote.session.canOpenWorkspacePath()).value;
+
+// 默认应用打开（HTML 即默认浏览器；文件夹即文件管理器）
+await ctx.remote.session.openWorkspacePath({ path: absolute });
+
+// 在文件管理器中定位 / 选中
+await ctx.remote.session.openWorkspacePath({ path: absolute, action: 'reveal' });
+
+// 列出该文件的全部已注册处理器：{ id, name, default, icon(data: URL) }
+const apps = (await ctx.remote.session.workspacePathApplications({ path: absolute })).value;
+// 用指定处理器打开（application 必须是上面返回的 id）
+await ctx.remote.session.openWorkspacePath({ path: absolute, application: app.id });
+```
+
+返回体均为 `{ ok: true, value }` / `{ ok: false, error }`；失败要显示可见反馈。
+`package.json` 的 `dsh.client.inject` 需同时声明 `@deepseek-ai/dsh-api-gateway`、
+`@deepseek-ai/dsh-api-remotes`、`@deepseek-ai/dsh-api-session-controller`，否则回退到 `ctx.remote`
+可能尚未就绪（看到 `ctx.remote` 为空就查这里）。

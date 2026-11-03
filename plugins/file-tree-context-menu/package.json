@@ -1,7 +1,7 @@
 {
   "name": "@local/file-tree-context-menu",
   "version": "1.1.0",
-  "description": "Right-click files or folders in the workspace file tree and deliverable lists to copy absolute/relative paths, copy an @-mention, or add them to the conversation.",
+  "description": "Right-click files or folders in the workspace file tree and deliverable lists to add them to the conversation, copy paths, open them with the default app or a browser, or reveal them in the file manager.",
   "private": true,
   "type": "module",
   "author": "Mark930209 <guimaxingtian@163.com>",
@@ -14,7 +14,10 @@
     "context-menu",
     "file-tree",
     "mention",
-    "workspace"
+    "workspace",
+    "open-in-app",
+    "reveal",
+    "browser"
   ],
   "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/file-tree-context-menu",
   "repository": {
@@ -38,6 +41,9 @@
       "platform": "web",
       "immediately": true,
       "inject": [
+        "@deepseek-ai/dsh-api-gateway",
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-api-session-controller",
         "@deepseek-ai/dsh-client-ui-sidebar-files",
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-locale"

@@ -7,8 +7,15 @@
  * @deepseek-ai/dsh-client-ui-deliverables — opens a small menu that can:
  *   - add the file/folder to the conversation composer as a reference chip,
  *   - copy the @-mention form,
- *   - copy the absolute host path,
- *   - copy the workspace-relative path.
+ *   - open it with the default application (a web page lands in the browser),
+ *   - reveal it in the OS file manager,
+ *   - open a web page in a detected browser,
+ *   - pick any registered handler under "open with",
+ *   - copy the absolute host path, the workspace-relative path, or the name.
+ *
+ * Open/reveal reuse the core Session Remote (`ctx.remote.session`):
+ * `openWorkspacePath({ path, action })` and `workspacePathApplications({ path })`,
+ * gated by `canOpenWorkspacePath()` so pure-web deployments hide the group.
  *
  * Row identity is read from the owners' own stable markers:
  * file-tree rows use `li[data-files-entry][data-files-path]` under
@@ -38,9 +45,24 @@ window.__ModuleLoader__.load({
       'menu.copyMention': '复制 @ 引用',
       'menu.copyAbsolute': '复制绝对路径',
       'menu.copyRelative': '复制相对路径',
+      'menu.copyName': '复制名称',
+      'menu.open': '用默认应用打开',
+      'menu.openFolder': '在文件管理器中打开',
+      'menu.reveal': '在文件夹中显示',
+      'menu.browser': '用浏览器打开',
+      'menu.openWith': '打开方式…',
+      'menu.back': '返回',
+      'menu.defaultApp': '默认',
       'status.copied': '已复制',
       'status.addedText': '已插入文本（非芯片）',
-      'status.failed': '操作失败'
+      'status.failed': '操作失败',
+      'status.opened': '已打开',
+      'status.openFailed': '打开失败',
+      'status.revealFailed': '无法显示位置',
+      'status.unavailable': '当前环境不支持本地打开',
+      'status.loading': '正在获取应用…',
+      'status.noApps': '没有可用的应用程序',
+      'status.appsFailed': '无法获取应用列表'
     };
     /** English dictionary, key-identical to the Chinese source of truth. */
     const en = {
@@ -49,9 +71,24 @@ window.__ModuleLoader__.load({
       'menu.copyMention': 'Copy @-mention',
       'menu.copyAbsolute': 'Copy absolute path',
       'menu.copyRelative': 'Copy relative path',
+      'menu.copyName': 'Copy name',
+      'menu.open': 'Open with default app',
+      'menu.openFolder': 'Open in file manager',
+      'menu.reveal': 'Show in folder',
+      'menu.browser': 'Open in browser',
+      'menu.openWith': 'Open with…',
+      'menu.back': 'Back',
+      'menu.defaultApp': 'Default',
       'status.copied': 'Copied',
       'status.addedText': 'Inserted as text (no chip)',
-      'status.failed': 'Action failed'
+      'status.failed': 'Action failed',
+      'status.opened': 'Opened',
+      'status.openFailed': 'Could not open',
+      'status.revealFailed': 'Could not show location',
+      'status.unavailable': 'Local opening is unavailable here',
+      'status.loading': 'Loading applications…',
+      'status.noApps': 'No applications available',
+      'status.appsFailed': 'Could not load applications'
     };
 
     // ------------------------------------------------------------------ css
@@ -68,6 +105,12 @@ window.__ModuleLoader__.load({
       '.ftcm-item:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px;}',
       '.ftcm-item[data-state="copied"]{color:var(--dsw-alias-state-success-primary);}',
       '.ftcm-item[data-state="failed"]{color:var(--dsw-alias-state-error-primary);}',
+      '.ftcm-item:disabled{opacity:.55;cursor:default;}',
+      '.ftcm-item-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;}',
+      '.ftcm-icon{width:16px;height:16px;flex:none;border-radius:3px;object-fit:contain;}',
+      '.ftcm-hint{margin-left:6px;color:var(--dsw-alias-label-tertiary);font-size:11px;}',
+      '.ftcm-note{padding:6px 10px;color:var(--dsw-alias-label-tertiary);font-size:12px;}',
+      '.ftcm-panel{max-height:calc(100vh - 16px);overflow-y:auto;}',
       '.ftcm-sep{height:1px;margin:4px 6px;background:var(--dsw-alias-border-l1);}'
     ].join('');
 
@@ -94,7 +137,9 @@ window.__ModuleLoader__.load({
     /** Latest session id and cwd captured from the standard slot props. */
     let sessionId = null;
     let sessionCwd = null;
-    /** Client plugin context, kept for `ctx.get('sessions')` lookups. */
+    /** Whether the serving desktop can open/reveal Host paths; null until answered. */
+    let desktopAvailable = null;
+    /** Client plugin context, kept for `ctx.get(...)` service lookups. */
     let pluginCtx = null;
     const listeners = new Set();
 
@@ -109,7 +154,7 @@ window.__ModuleLoader__.load({
       return state;
     }
     function openMenu(next) {
-      state = { menu: next, feedback: null };
+      state = { menu: { ...next, view: 'main', apps: null, appsError: false }, feedback: null };
       publish();
     }
     function closeMenu() {
@@ -144,6 +189,19 @@ window.__ModuleLoader__.load({
       const windows = /^[A-Za-z]:/.test(root) || root.startsWith('\\\\');
       const sep = windows ? '\\' : '/';
       return root.replace(/[\\/]+$/, '') + sep + rel.split('/').join(sep);
+    }
+    /**
+     * Absolute Host path for a resolved or relative row value, in native separators.
+     * Already-absolute values are preserved (delivered cards and review rows report
+     * absolute or workspace-relative paths interchangeably).
+     */
+    function absoluteOf(root, path) {
+      if (/^[A-Za-z]:[\\/]/.test(path)) return path.replace(/\//g, '\\');
+      if (path.startsWith('\\\\')) return path.replace(/\//g, '\\');
+      if (path.startsWith('/')) return path;
+      const windows = /^[A-Za-z]:/.test(root) || root.startsWith('\\\\');
+      const sep = windows ? '\\' : '/';
+      return root.replace(/[\\/]+$/, '') + sep + toSlashes(path).replace(/^\/+/, '').split('/').join(sep);
     }
     /**
      * The `@path` mention text, mirroring the composer file intake's
@@ -199,6 +257,124 @@ window.__ModuleLoader__.load({
         });
     }
 
+
+    // ----------------------------------------------------- host open actions
+    /** Web-page extensions for which "open in browser" is meaningful. */
+    const BROWSER_FILE = /\.(?:html?|xhtml|shtml|svg)$/i;
+    /** Display names that identify a web browser among OS file handlers. */
+    const BROWSER_APP = /(chrome|chromium|edge|firefox|brave|opera|vivaldi|safari|waterfox|librewolf|thorium|yandex|arc|browser|360|qq|浏览器)/i;
+
+    /** Resolve the Session Remote namespace from the plugin context. */
+    function getRemoteSession() {
+      const ctx = pluginCtx;
+      if (ctx === null) return undefined;
+      let remote;
+      try {
+        if (typeof ctx.get === 'function') remote = ctx.get('remote');
+      } catch (_error) {
+        // fall through to the property access below
+      }
+      if (remote === undefined || remote === null) remote = ctx.remote;
+      return remote === undefined || remote === null ? undefined : remote.session;
+    }
+
+    /** Read once whether the serving desktop can open Host paths. */
+    function loadDesktopAvailability() {
+      const session = getRemoteSession();
+      if (session === undefined || typeof session.canOpenWorkspacePath !== 'function') {
+        desktopAvailable = false;
+        publish();
+        return;
+      }
+      Promise.resolve()
+        .then(() => session.canOpenWorkspacePath())
+        .then((result) => {
+          desktopAvailable = !!(result && result.ok && result.value);
+          publish();
+        })
+        .catch(() => {
+          desktopAvailable = false;
+          publish();
+        });
+    }
+
+    /** Send one open/reveal request through the Session Remote and surface failures. */
+    async function requestOpen(key, request) {
+      const session = getRemoteSession();
+      if (session === undefined || typeof session.openWorkspacePath !== 'function') {
+        showFeedback(key, false, 'status.unavailable');
+        return false;
+      }
+      try {
+        const result = await session.openWorkspacePath(request);
+        if (result && result.ok) {
+          closeMenu();
+          return true;
+        }
+        showFeedback(key, false, request.action === 'reveal' ? 'status.revealFailed' : 'status.openFailed');
+      } catch (error) {
+        warn('openWorkspacePath failed', error);
+        showFeedback(key, false, request.action === 'reveal' ? 'status.revealFailed' : 'status.openFailed');
+      }
+      return false;
+    }
+
+    /** Open a file with its default application, or a folder in the file manager. */
+    function runOpen(path) {
+      return requestOpen('open', { path });
+    }
+
+    /** Reveal a file or folder in the OS file manager. */
+    function runReveal(path) {
+      return requestOpen('reveal', { path, action: 'reveal' });
+    }
+
+    /** List the file's OS handlers, or null when the query fails. */
+    async function queryApplications(path) {
+      const session = getRemoteSession();
+      if (session === undefined || typeof session.workspacePathApplications !== 'function') return null;
+      try {
+        const result = await session.workspacePathApplications({ path });
+        return result && result.ok && Array.isArray(result.value) ? result.value : null;
+      } catch (error) {
+        warn('workspacePathApplications failed', error);
+        return null;
+      }
+    }
+
+    /** Open a web page file in a detected browser, falling back to the system default. */
+    async function runBrowserOpen(path) {
+      const apps = await queryApplications(path);
+      const browser = Array.isArray(apps)
+        ? (apps.find((app) => app && typeof app.name === 'string' && app.default && BROWSER_APP.test(app.name))
+          || apps.find((app) => app && typeof app.name === 'string' && BROWSER_APP.test(app.name)))
+        : undefined;
+      if (browser !== undefined && browser !== null) {
+        return requestOpen('browser', { path, application: browser.id });
+      }
+      return requestOpen('browser', { path });
+    }
+
+    /** Switch the menu to its "open with" application list. */
+    function showApplications() {
+      if (state.menu === null) return;
+      state = { menu: { ...state.menu, view: 'apps', apps: null, appsError: false }, feedback: null };
+      publish();
+      const menu = state.menu;
+      const path = absoluteOf(menu.root, menu.path);
+      queryApplications(path).then((apps) => {
+        if (state.menu === null || state.menu.view !== 'apps') return;
+        state = { menu: { ...state.menu, apps: apps === null ? [] : apps, appsError: apps === null }, feedback: null };
+        publish();
+      });
+    }
+
+    /** Return from the application list to the main menu. */
+    function showMainMenu() {
+      if (state.menu === null) return;
+      state = { menu: { ...state.menu, view: 'main', apps: null, appsError: false }, feedback: null };
+      publish();
+    }
     /**
      * Console diagnostics for the chip-insert route; keeps fallbacks explainable.
      */
@@ -371,23 +547,38 @@ window.__ModuleLoader__.load({
 
       const kind = menuState.kind;
       const relative = relativeOf(menuState.root, menuState.path);
-      const absolute = nativeAbsolute(menuState.root, menuState.path);
+      const absolute = absoluteOf(menuState.root, menuState.path);
       const mention = mentionOf(kind, relative);
+      const displayName = labelOf(kind, relative);
+      const isDirectory = kind === 'directory';
+      const browserFile = !isDirectory && BROWSER_FILE.test(menuState.path);
+      const canUseDesktop = desktopAvailable !== false;
 
-      const item = (key, label, run) => {
+      const item = (key, label, run, options) => {
         const mine = current.feedback !== null && current.feedback.key === key;
         const text = mine
-          ? (current.feedback.ok ? t(current.feedback.textKey || 'status.copied') : t('status.failed'))
+          ? (current.feedback.ok ? t(current.feedback.textKey || 'status.copied') : t(current.feedback.textKey || 'status.failed'))
           : label;
+        const children = [];
+        if (options !== undefined && typeof options.icon === 'string' && options.icon.startsWith('data:')) {
+          children.push(h('img', { key: 'icon', className: 'ftcm-icon', src: options.icon, alt: '' }));
+        }
+        children.push(h('span', { key: 'label', className: 'ftcm-item-label' }, text));
+        if (options !== undefined && typeof options.hint === 'string' && options.hint !== '') {
+          children.push(h('span', { key: 'hint', className: 'ftcm-hint' }, options.hint));
+        }
         return h('button', {
           key,
           type: 'button',
           role: 'menuitem',
           className: 'ftcm-item',
+          disabled: options !== undefined && options.disabled === true ? true : undefined,
           'data-state': mine ? (current.feedback.ok ? 'copied' : 'failed') : undefined,
           onClick: run
-        }, text);
+        }, children);
       };
+
+      const note = (key, text) => h('div', { key, className: 'ftcm-note', role: 'none' }, text);
 
       const onKeyDown = (event) => {
         if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
@@ -401,20 +592,56 @@ window.__ModuleLoader__.load({
         if (next !== undefined) next.focus();
       };
 
-      return h('div', {
+      const panel = (children) => h('div', {
         ref: panelRef,
         role: 'menu',
         'aria-label': t('menu.label'),
         className: 'ftcm-panel',
         style: { left: position.left, top: position.top },
         onKeyDown
-      }, [
+      }, children);
+
+      // Second level: every registered handler for this file, in OS preference order.
+      if (menuState.view === 'apps') {
+        const children = [item('back', '\u2190 ' + t('menu.back'), showMainMenu)];
+        if (menuState.apps === null) {
+          children.push(note('apps-loading', t('status.loading')));
+        } else if (menuState.apps.length === 0) {
+          children.push(note('apps-empty', menuState.appsError ? t('status.appsFailed') : t('status.noApps')));
+        } else {
+          for (const app of menuState.apps) {
+            if (app === null || typeof app !== 'object' || typeof app.id !== 'string' || app.id === '') continue;
+            const name = typeof app.name === 'string' && app.name !== '' ? app.name : app.id;
+            const key = 'app:' + app.id;
+            children.push(item(key, name, () => requestOpen(key, { path: absolute, application: app.id }), {
+              icon: typeof app.icon === 'string' ? app.icon : undefined,
+              hint: app.default === true ? t('menu.defaultApp') : undefined
+            }));
+          }
+        }
+        return panel(children);
+      }
+
+      const children = [
         item('add', t('menu.add'), () => runAdd(kind, relative, mention)),
-        item('mention', t('menu.copyMention'), () => runCopy('mention', mention)),
-        h('div', { key: 'sep', role: 'separator', className: 'ftcm-sep' }),
-        item('absolute', t('menu.copyAbsolute'), () => runCopy('absolute', absolute)),
-        item('relative', t('menu.copyRelative'), () => runCopy('relative', relative))
-      ]);
+        item('mention', t('menu.copyMention'), () => runCopy('mention', mention))
+      ];
+      if (canUseDesktop) {
+        children.push(h('div', { key: 'sep-open', role: 'separator', className: 'ftcm-sep' }));
+        children.push(item('open', isDirectory ? t('menu.openFolder') : t('menu.open'), () => runOpen(absolute)));
+        children.push(item('reveal', t('menu.reveal'), () => runReveal(absolute)));
+        if (browserFile) {
+          children.push(item('browser', t('menu.browser'), () => runBrowserOpen(absolute)));
+        }
+        if (!isDirectory) {
+          children.push(item('openWith', t('menu.openWith'), showApplications));
+        }
+      }
+      children.push(h('div', { key: 'sep-copy', role: 'separator', className: 'ftcm-sep' }));
+      children.push(item('absolute', t('menu.copyAbsolute'), () => runCopy('absolute', absolute)));
+      children.push(item('relative', t('menu.copyRelative'), () => runCopy('relative', relative)));
+      children.push(item('name', t('menu.copyName'), () => runCopy('name', displayName)));
+      return panel(children);
     }
 
     // --------------------------------------------------------------- body
@@ -433,6 +660,9 @@ window.__ModuleLoader__.load({
         ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'file-tree-context-menu: dictionaries');
         t = ctx.locale.bind(NS);
       }
+      // Discover whether this deployment can hand paths to the desktop before
+      // deciding to show the open/reveal group.
+      loadDesktopAvailability();
 
       /**
        * Resolve a right-clicked element to a file/folder identity, or null when
@@ -506,6 +736,6 @@ window.__ModuleLoader__.load({
       ctx.slots.inject('shell.overlay', registration('shell.overlay', FileTreeContextMenu, 60));
     }
 
-    return { inject: ['slots', 'locale'], apply };
+    return { inject: ['slots', 'locale', 'remote', 'remote.session'], apply };
   }
 });

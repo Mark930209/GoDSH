@@ -8,6 +8,14 @@
 | 复制 @ 引用 | 复制 `@相对路径`（与引用芯片的剪贴板格式一致，可直接粘贴进对话） |
 | 复制绝对路径 | 原生 Windows 形式，如 `E:\repo\Modules\a.cpp` |
 | 复制相对路径 | 相对会话工作区根目录、`/` 分隔 |
+| 复制名称 | 仅文件名/文件夹名 |
+| 用默认应用打开 | 外部程序打开：文件走系统默认关联（HTML 即默认浏览器），文件夹在文件管理器中打开 |
+| 在文件夹中显示 | 在资源管理器中定位并选中该文件/文件夹 |
+| 用浏览器打开 | 仅 `html/htm/xhtml/shtml/svg`：自动从系统关联里选择 Chrome / Edge / Firefox 等浏览器 |
+| 打开方式… | 二级菜单列出该文件全部已注册应用（带图标与「默认」标记） |
+
+> 本机打开能力复用核心 Session Remote（`ctx.remote.session.openWorkspacePath` / `workspacePathApplications`）；
+> 纯 Web 部署不支持时自动隐藏该分组。
 
 支持右键的位置：文件树行、交付文件卡片、`已编辑 N 个文件` 改动卡片、审阅侧边栏的文件选择按钮。
 （限制：审阅页的**下拉菜单项**本身不携带路径信息，不在支持范围。）
@@ -54,6 +62,8 @@ CHANGELOG.md           版本记录
   改动卡片 `div[data-changed-files]`（`aria-describedby` 隐藏 span）；审阅页 `[data-review-file]`。
 - 插入芯片走公开事件 `slash/input-insert-reference`（会话作用域 ctx 的 `bail`），span 来自公开的
   `inputActions.captureInsertion()`（CAS 语义，失败自动回退纯文本）。
+- 本机打开调用 `ctx.remote.session.openWorkspacePath({ path, action })` 与 `workspacePathApplications({ path })`，
+  以 `canOpenWorkspacePath()` 判断能力，不自行拼系统命令。
 - 只依赖宿主提供的 React 与标准 slot props，**无第三方运行时依赖**。
 
 ## 许可
