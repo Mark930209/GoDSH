@@ -1,0 +1,65 @@
+name: Release plugin
+
+on:
+  push:
+    tags:
+      - '*-v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Resolve plugin from tag
+        id: meta
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          plugin="${tag%-v*}"
+          version="${tag##*-v}"
+          if [ ! -d "plugins/$plugin" ]; then
+            echo "::error::tag $tag 没有对应的插件目录 plugins/$plugin"
+            exit 1
+          fi
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "plugin=$plugin" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Validate plugin
+        run: node scripts/validate-plugins.mjs --plugin "${{ steps.meta.outputs.plugin }}"
+
+      - name: Verify package version matches tag
+        run: |
+          version=$(node -p "require('./plugins/${{ steps.meta.outputs.plugin }}/package.json').version")
+          if [ "$version" != "${{ steps.meta.outputs.version }}" ]; then
+            echo "::error::package.json 版本 $version 与 tag 不一致"
+            exit 1
+          fi
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ steps.meta.outputs.plugin }} v${{ steps.meta.outputs.version }}
+          generate_release_notes: true
+
+      - name: Refresh market index
+        run: |
+          node scripts/make-market-index.mjs --commit "$GITHUB_SHA"
+          if git diff --quiet -- docs/market-index.json; then
+            echo "市场索引无变化"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/market-index.json
+          git commit -m "chore: refresh market index for ${{ steps.meta.outputs.tag }} [skip ci]"
+          git push origin HEAD:main

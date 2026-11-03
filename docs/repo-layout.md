@@ -37,11 +37,11 @@
 
 ## 索引与安装的对应关系
 
-- 安装单个插件：`git+https://<host>/<user>/dsh-plugins.git#<commit>&path:/plugins/<name>`
+- 安装单个插件：`git+https://github.com/Mark930209/GoDSH.git#<commit>&path:/plugins/<name>`
 - 市场索引里每个版本：
   ```json
   { "version": "1.1.0",
-    "source": { "type": "git", "url": "https://github.com/<user>/dsh-plugins",
+    "source": { "type": "git", "url": "https://github.com/Mark930209/GoDSH",
                 "commit": "<40位>", "path": "plugins/file-tree-context-menu" },
     "engines": { "dsh": ">=0.2.1-rc.5" } }
   ```

@@ -6,7 +6,7 @@
  * git 源自动带 path: plugins/<name>，因此 monorepo 也能按插件独立安装。
  *
  * 用法：
- *   node scripts/make-market-index.mjs --git-url https://github.com/<user>/dsh-plugins
+ *   node scripts/make-market-index.mjs            # 默认读 repo.config.json
  *   node scripts/make-market-index.mjs --git-url ... --commit <40位SHA> --dry-run
  *
  * 可选参数：
@@ -38,6 +38,9 @@ function argValue(name) {
   return value;
 }
 const dryRun = argv.includes('--dry-run');
+const repoConfig = (() => {
+  try { return JSON.parse(readFileSync(join(root, 'repo.config.json'), 'utf8')); } catch { return {}; }
+})();
 
 // ---------------------------------------------------------------- 通用校验规则
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._~-]*\/)?[a-z0-9][a-z0-9._~-]*$/u;
@@ -48,9 +51,10 @@ const SEMVER = new RegExp(
   '(?:-' + PRERELEASE + '(?:\\.' + PRERELEASE + ')*)?' +
   '(?:\\+[0-9a-zA-Z-]+(?:\\.[0-9a-zA-Z-]+)*)?$', 'u');
 
-const gitUrl = argValue('git-url');
+let gitUrl = argValue('git-url');
+if (gitUrl === undefined) gitUrl = repoConfig.gitUrl;
 if (typeof gitUrl !== 'string' || gitUrl === '') {
-  fail('需要 --git-url，例如 https://github.com/<user>/dsh-plugins');
+  fail('需要 --git-url（或在 repo.config.json 中配置 gitUrl）');
 }
 let parsedUrl;
 try { parsedUrl = new URL(gitUrl); } catch { fail('--git-url 不是合法 URL: ' + gitUrl); }
@@ -139,8 +143,8 @@ if (plugins.length === 0) fail('plugins/ 下没有找到任何 bundle');
 const index = {
   format: 1,
   title: {
-    en: argValue('index-title-en') || 'Cybertron Tools Market',
-    zh: argValue('index-title-zh') || 'Cybertron 工具市场'
+    en: argValue('index-title-en') || (repoConfig.marketTitle && repoConfig.marketTitle.en) || 'DSH Plugin Market',
+    zh: argValue('index-title-zh') || (repoConfig.marketTitle && repoConfig.marketTitle.zh) || 'DSH 插件市场'
   },
   description: {
     en: 'Plugin market index for DeepSeek Harness bundles.',

@@ -24,7 +24,7 @@ install_bundle  target = <本目录绝对路径>
 方式二（从 Git 安装，推荐给其他机器）：
 
 ```
-git+https://github.com/<user>/dsh-plugins.git#<40位commit>&path:/plugins/file-tree-context-menu
+git+https://github.com/Mark930209/GoDSH.git#<40位commit>&path:/plugins/file-tree-context-menu
 ```
 
 方式三（从 npm 安装，需先发布）：`包名@版本`。

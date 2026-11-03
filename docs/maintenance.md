@@ -7,34 +7,44 @@ cd E:\Projects\DSH_Plugins_Dev\plugins\<name>
 
 # 1 改代码（client.js / locale / README …）
 
-# 2 静态检查
-node --check client.js
-node --check index.js
-node -e "for (const f of ['package.json','locale/zh.json','locale/en.json']) JSON.parse(require('fs').readFileSync(f,'utf8'))"
+# 2 静态检查（仓库根有统一校验）
+cd E:\Projects\DSH_Plugins_Dev
+node scripts\validate-plugins.mjs --plugin <name>
 
 # 3 重启 DeepSeek Harness（托盘退出再开）→ 右键冒烟
 
-# 4 更新 CHANGELOG.md
-
-# 5 升版本（会 commit + 打 tag）
-npm version patch -m "chore: release v%s"
-#   minor = 新能力；major = 不兼容（通常是要适配新版 DSH 接口）
-
-# 6 建议补一个带插件前缀的 tag（monorepo 区分用）
-git tag -a <name>-v<version> -m "v<version>"
-
-# 7 推送
-git push --follow-tags
-
-# 8 刷新市场索引（仓库根）
-cd E:\Projects\DSH_Plugins_Dev
-node scripts/make-market-index.mjs --git-url https://github.com/<用户名>/dsh-plugins
-git add docs/market-index.json && git commit -m "chore: market index" && git push
+# 4 更新 CHANGELOG.md，提交你的改动
+git add plugins/<name>
+git commit -m "feat(<name>): …"
 ```
 
 所有改动**及时提交**：每步可验证就 `git commit`。
 
-## 2. 生效方式
+## 2. 发版（脚本一键）
+
+```powershell
+cd E:\Projects\DSH_Plugins_Dev
+node scripts\release.mjs <name> patch "变更摘要" --dry-run   # 先看版本
+node scripts\release.mjs <name> patch "变更摘要" --push      # 提交+tag+索引+推送
+```
+
+- patch = 修复；minor = 新能力；major = 不兼容（通常是要适配新版 DSH 接口）。
+- tag 自动为 `<name>-v<version>`，推送后 CI 自动建 Release 并刷新索引。
+
+手动等价流程（不推荐）：
+
+```powershell
+cd plugins\<name>
+npm version patch --no-git-tag-version
+cd ../..
+git add -A && git commit -m "chore(<name>): release vX.Y.Z"
+git tag -a <name>-vX.Y.Z -m "<name>-vX.Y.Z"
+node scripts\make-market-index.mjs
+git add docs/market-index.json && git commit -m "chore: refresh market index"
+git push origin HEAD --follow-tags
+```
+
+## 3. 生效方式
 
 | 改动 | 生效 |
 |---|---|
@@ -44,23 +54,24 @@ git add docs/market-index.json && git commit -m "chore: market index" && git pus
 
 排障：`list_plugins` 看插件行是否 `enabled / active`；DevTools 看 `[<插件id>]` 警告。
 
-## 3. 回滚
+## 4. 回滚
 
 - 装回旧版：`install_bundle` 用旧 tag 的 commit（`git rev-parse <tag>^{commit}`）。
 - 代码回滚：`git revert <坏提交>`（已推送时）或 `git reset --hard <旧tag>`（本地）。
 - 版本已发布又出问题：发 patch 修复版，别复用旧 tag。
 
-## 4. 兼容性回归（DSH 升级后跑一遍）
+## 5. 兼容性回归（DSH 升级后跑一遍）
 
 1. 插件行 `active`；2. 核心交互可用；3. 控制台无报错；4. 多语言/主题正常。
 接口变了：改代码 → 升版本（minor/major）→ 更新 `engines.dsh` 与索引 → 回归记录写进 CHANGELOG。
 
 **当前基线：DSH `0.2.1-rc.5`（Windows 桌面端）。**
 
-## 5. 新增插件
+## 6. 新增插件
 
 ```powershell
 cd E:\Projects\DSH_Plugins_Dev
-node scripts/new-plugin.mjs dsh-xxx     # 复制 templates/plugin-bundle
+node scripts\new-plugin.mjs dsh-xxx     # 复制 templates/plugin-bundle
+node scripts\validate-plugins.mjs --plugin dsh-xxx
 # 然后：装它、改 client.js、加进 README 的插件清单、提交
 ```

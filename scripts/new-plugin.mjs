@@ -31,8 +31,10 @@ const pkgPath = join(target, 'package.json');
 const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
 pkg.name = '@local/' + name;
 pkg.version = '0.1.0';
-pkg.repository = { type: 'git', url: 'https://github.com/congzhisen/dsh-plugins.git', directory: 'plugins/' + name };
-pkg.homepage = 'https://github.com/congzhisen/dsh-plugins/tree/main/plugins/' + name;
+const repoConfig = JSON.parse(readFileSync(join(root, 'repo.config.json'), 'utf8'));
+pkg.repository = { type: 'git', url: repoConfig.gitUrl.replace(/\.git$/u, '') + '.git', directory: 'plugins/' + name };
+pkg.homepage = repoConfig.gitUrl.replace(/\.git$/u, '') + '/tree/' + (repoConfig.defaultBranch || 'main') + '/plugins/' + name;
+pkg.author = repoConfig.author;
 writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n', 'utf8');
 
 // 替换占位符 __PLUGIN__

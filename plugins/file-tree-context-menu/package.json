@@ -4,7 +4,7 @@
   "description": "Right-click files or folders in the workspace file tree and deliverable lists to copy absolute/relative paths, copy an @-mention, or add them to the conversation.",
   "private": true,
   "type": "module",
-  "author": "congzhisen",
+  "author": "Mark930209 <guimaxingtian@163.com>",
   "license": "MIT",
   "keywords": [
     "dsh",
@@ -16,10 +16,10 @@
     "mention",
     "workspace"
   ],
-  "homepage": "https://github.com/congzhisen/dsh-plugins/tree/main/plugins/file-tree-context-menu",
+  "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/file-tree-context-menu",
   "repository": {
     "type": "git",
-    "url": "https://github.com/congzhisen/dsh-plugins.git",
+    "url": "https://github.com/Mark930209/GoDSH.git",
     "directory": "plugins/file-tree-context-menu"
   },
   "scripts": {
