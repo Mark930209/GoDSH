@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Project Skill Picker",
-    "description": "Adds a persistent dropdown to the composer tool row that auto-discovers the current project's custom skills (.dsh/skills, .agents/skills) and inserts the /name token on pick, instead of scrolling the global slash menu."
+    "description": "Adds a compact button to the composer tool row whose popup panel filters between project skills, global skills, and agents: project skills are discovered from the current project's .agents/skills and .dsh/skills by path, agents list switchable agent presets, and a pick inserts /name or switches the preset."
   }
 }

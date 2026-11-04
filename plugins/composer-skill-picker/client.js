@@ -1,14 +1,18 @@
 /**
  * 项目技能选择器（composer-skill-picker）
  *
- * 在输入框工具行常驻一个下拉框，自动发现**当前项目**的自定义技能：
- *   - `<项目根>/.dsh/skills/<名字>/SKILL.md`    → source: project-dsh
- *   - `<项目根>/.agents/skills/<名字>/SKILL.md` → source: project-agents
+ * 在输入框工具行常驻一个短按钮，点开是一个浮层面板，用 3 个复选框控制列表：
+ *   - 项目技能：`<项目根>/.agents/skills` 或 `<项目根>/.dsh/skills` 下的 SKILL.md
+ *   - 全局技能：用户级（`<agentsHome>/skills`、`<dshHome>/skills`）与随包内置（bundled）
+ *   - Agent：DSH 的 agent preset（YAML 声明的插件组合）
  *
- * 项目根 = 最近的含 `.git` 的祖先目录（没有则用会话 cwd），由 DSH 的 skill
- * provider 判定；下拉项在会话打开时自动加载，无需手动维护清单。
- * 选中后把 `/技能名 ` 插入草稿（与内置 ui-skill 的 onPick 一致），发送时由宿主
- * 按 skill 解析；不提交消息、不打开全局 `/` 菜单。
+ * 项目根 = 最近的含 `.git` 的祖先目录（没有则用会话 cwd），由 DSH 的 skill provider
+ * 判定；这里只做路径归属判断，因为 `skills/list` 的结果条目**没有 source 字段**
+ * （只有 path / name / description / whenToUse / modelInvocable）。
+ *
+ * 选技能 → 把 `/技能名 ` 插入草稿（与内置 ui-skill 的 onPick 一致），发送时由宿主解析。
+ * 选 Agent → 调 `agentPresets/select`；只在空白会话（还没发第一条消息）能切换，
+ * 否则宿主返回 `agent-preset/locked`。
  */
 window.__ModuleLoader__.load({
   id: '@local/composer-skill-picker',
@@ -19,43 +23,104 @@ window.__ModuleLoader__.load({
     // ---------------------------------------------------------------- constants
     /** 本插件拥有的 locale 命名空间。 */
     const NS = 'composer-skill-picker';
-    /** 视为“当前项目自定义技能”的目录（相对项目根，与 DSH 的 project-* 技能根一致）。 */
-    const PROJECT_SKILL_DIRS = ['/.agents/skills/', '/.dsh/skills/'];
-    /** 样式元素去重标记。 */
-    const CSS_TAG = '@local/composer-skill-picker';
-    /** 下拉箭头（与内置模型选择器同一枚 chevron）。 */
+    /** 视为“项目技能”的目录标记（取标记之前的目录作为项目根）。 */
+    const PROJECT_MARKERS = ['/.agents/skills/', '/.dsh/skills/'];
+    /** 面板宽度（px）。 */
+    const PANEL_WIDTH = 420;
+    /** 下拉箭头。 */
     const CHEVRON = 'url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'12\' height=\'12\' viewBox=\'0 0 12 12\' fill=\'none\'%3E%3Cpath d=\'M3 4.5L6 7.5L9 4.5\' stroke=\'%2381858C\' stroke-width=\'1.5\' stroke-linecap=\'round\' stroke-linejoin=\'round\'/%3E%3C/svg%3E")';
 
     // ---------------------------------------------------------------- locale
     /** 简体中文（key 集合的事实来源）。 */
     const zh = {
       'label': '技能',
-      'title': '选择当前项目的自定义技能（.dsh/skills / .agents/skills）',
-      'loading': '技能加载中…',
-      'empty': '当前项目没有技能',
-      'error': '技能加载失败'
+      'title': '选择技能或 Agent',
+      'project': '项目技能',
+      'global': '全局技能',
+      'agent': 'Agent',
+      'loading': '加载中…',
+      'error': '加载失败',
+      'emptyProject': '当前项目没有技能',
+      'emptyGlobal': '没有全局技能',
+      'emptyAgent': '没有可用的 Agent',
+      'emptyPick': '至少勾选一类',
+      'builtin': '内置',
+      'user': '用户',
+      'agentDefault': '默认',
+      'agentBroken': '不可用',
+      'agentLocked': '会话已开始：Agent 只能在发送第一条消息前切换',
+      'agentApplied': '已切换 Agent',
+      'agentFailed': '切换 Agent 失败',
+      'agentUnavailable': 'Agent 列表不可用'
     };
     /** English mirror. */
     const en = {
       'label': 'Skills',
-      'title': 'Pick a skill of the current project (.dsh/skills / .agents/skills)',
-      'loading': 'Loading skills…',
-      'empty': 'No skills in this project',
-      'error': 'Could not load skills'
+      'title': 'Pick a skill or agent',
+      'project': 'Project',
+      'global': 'Global',
+      'agent': 'Agent',
+      'loading': 'Loading…',
+      'error': 'Load failed',
+      'emptyProject': 'No skills in this project',
+      'emptyGlobal': 'No global skills',
+      'emptyAgent': 'No agent available',
+      'emptyPick': 'Select at least one group',
+      'builtin': 'Built-in',
+      'user': 'User',
+      'agentDefault': 'default',
+      'agentBroken': 'broken',
+      'agentLocked': 'Session started: an agent can only be switched before the first message',
+      'agentApplied': 'Agent switched',
+      'agentFailed': 'Could not switch agent',
+      'agentUnavailable': 'Agent roster unavailable'
     };
 
     // ---------------------------------------------------------------- styles
     const CSS = [
-      '.cskp-select{border-radius:var(--dsw-radius-sm);max-width:200px;height:28px;',
-      'color:var(--dsw-alias-label-secondary);white-space:nowrap;cursor:pointer;',
-      'appearance:none;background-color:transparent;background-image:' + CHEVRON + ';',
-      'background-position:right 4px center;background-repeat:no-repeat;background-size:12px 12px;',
-      'border:none;padding:0 20px 0 8px;font:inherit;font-size:12px;text-overflow:ellipsis;flex:none;}',
-      '.cskp-select:hover:not(:disabled){background-color:var(--dsw-alias-interactive-bg-hover-solid);',
+      '.cskp-trigger{display:inline-flex;align-items:center;gap:4px;height:28px;max-width:96px;',
+      'padding:0 6px;border:none;border-radius:var(--dsw-radius-sm);background:transparent;',
+      'color:var(--dsw-alias-label-secondary);font:inherit;font-size:12px;cursor:pointer;flex:none;}',
+      '.cskp-trigger:hover,.cskp-trigger[data-open="true"]{background:var(--dsw-alias-interactive-bg-hover-solid);',
       'color:var(--dsw-alias-label-primary);}',
-      '.cskp-select:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px;}',
-      '.cskp-select:disabled{opacity:.55;cursor:default;}',
-      '.cskp-select option{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-bg-layer-1);}'
+      '.cskp-trigger:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:1px;}',
+      '.cskp-trigger-label{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0;}',
+      '.cskp-chevron{width:12px;height:12px;flex:none;opacity:.75;background-image:' + CHEVRON + ';',
+      'background-repeat:no-repeat;background-position:center;background-size:12px 12px;}',
+      '.cskp-panel{position:fixed;z-index:90;display:flex;flex-direction:column;overflow:hidden;',
+      'max-height:min(420px,60vh);background:var(--dsw-alias-bg-layer-1);',
+      'border:1px solid var(--dsw-alias-border-l2);border-radius:8px;',
+      'box-shadow:0 12px 32px rgba(0,0,0,.16),0 2px 8px rgba(0,0,0,.08);font-size:12px;}',
+      '.cskp-filters{display:flex;flex-wrap:wrap;gap:10px;padding:8px 10px;',
+      'border-bottom:1px solid var(--dsw-alias-border-l2);flex:none;}',
+      '.cskp-check{display:inline-flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;',
+      'color:var(--dsw-alias-label-secondary);user-select:none;}',
+      '.cskp-check input{accent-color:var(--dsw-alias-brand-primary);margin:0;cursor:pointer;}',
+      '.cskp-count{color:var(--dsw-alias-state-idle-primary);font-size:11px;}',
+      '.cskp-hint{padding:5px 10px;font-size:11px;flex:none;color:var(--dsw-alias-state-warn-primary);',
+      'border-bottom:1px solid var(--dsw-alias-border-l1);}',
+      '.cskp-list{overflow-y:auto;overscroll-behavior:contain;padding:4px;flex:1 1 auto;min-height:0;}',
+      '.cskp-group{font-size:11px;font-weight:600;padding:6px 8px 2px;',
+      'color:var(--dsw-alias-label-secondary);}',
+      '.cskp-row{display:flex;flex-direction:column;gap:1px;width:100%;padding:5px 8px;border:none;',
+      'border-radius:var(--dsw-radius-sm);background:transparent;text-align:left;cursor:pointer;font:inherit;}',
+      '.cskp-row:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-solid);}',
+      '.cskp-row:disabled{opacity:.5;cursor:default;}',
+      '.cskp-row:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px;}',
+      '.cskp-line{display:flex;align-items:center;gap:6px;min-width:0;}',
+      '.cskp-name{flex:0 1 auto;min-width:0;font-size:12px;color:var(--dsw-alias-label-primary);',
+      'white-space:nowrap;overflow-x:auto;overflow-y:hidden;scrollbar-width:none;}',
+      '.cskp-name::-webkit-scrollbar{height:0;}',
+      '.cskp-meta{font-size:11px;color:var(--dsw-alias-label-secondary);white-space:nowrap;',
+      'overflow:hidden;text-overflow:ellipsis;}',
+      '.cskp-badge{flex:none;font-size:10px;line-height:14px;padding:0 4px;border-radius:4px;',
+      'background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary);}',
+      '.cskp-badge[data-tone="error"]{color:var(--dsw-alias-state-error-primary);}',
+      '.cskp-empty{padding:10px;font-size:12px;color:var(--dsw-alias-label-secondary);}',
+      '.cskp-notice{padding:6px 10px;font-size:11px;flex:none;',
+      'border-top:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary);}',
+      '.cskp-notice[data-kind="error"]{color:var(--dsw-alias-state-error-primary);}',
+      '.cskp-notice[data-kind="success"]{color:var(--dsw-alias-state-success-primary);}'
     ].join('');
 
     /**
@@ -67,14 +132,22 @@ window.__ModuleLoader__.load({
       if (typeof styles !== 'undefined' && styles && typeof styles.insert === 'function') {
         return styles.insert(css);
       }
-      const existing = document.querySelector('style[data-plugin-css=' + JSON.stringify(CSS_TAG) + ']');
-      if (existing !== null) return () => {};
       const tag = document.createElement('style');
-      tag.dataset.plugin = '@local/composer-skill-picker';
-      tag.dataset.pluginCss = CSS_TAG;
+      tag.dataset.pluginCss = NS;
       tag.textContent = css;
       document.head.appendChild(tag);
       return () => tag.remove();
+    }
+
+    /** 路径规范化：正斜杠 + 小写 + 去尾斜杠。 */
+    function normalizePath(value) {
+      if (typeof value !== 'string' || value === '') return undefined;
+      return value.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+    }
+
+    /** 中文排序。 */
+    function byName(left, right) {
+      return String(left.name ?? left.id ?? '').localeCompare(String(right.name ?? right.id ?? ''));
     }
 
     // ---------------------------------------------------------------- client body
@@ -86,170 +159,498 @@ window.__ModuleLoader__.load({
       const locale = ctx.locale;
       const sessions = ctx.sessions;
       const skills = ctx.remote.skills;
-      const t = (key) => locale.bind(NS)(key);
+      const t = locale.bind(NS);
 
       ctx.effect(() => insertCss(CSS), 'composer-skill-picker: stylesheet');
       ctx.effect(() => locale.register(NS, { zh, en }), 'composer-skill-picker: dictionaries');
 
-      /**
-       * 读取会话 cwd 并规范化为“正斜杠 + 小写”，用于判断技能文件是否属于该项目。
-       * `skills/list` 的结果条目只有 path、name、description、whenToUse、modelInvocable，
-       * **没有 source**，所以不能按 source 过滤，只能按路径归属判断。
-       * @param {string} sessionId - 会话 id。
-       * @returns {string | undefined} 规范化后的 cwd；拿不到时 undefined。
-       */
-      function sessionCwd(sessionId) {
+      // ------------------------------------------------------------ shared store
+      /** 模块级共享状态：触发器与浮层面板都订阅它。 */
+      const state = {
+        open: false,
+        sessionId: undefined,
+        sessionBlank: true,
+        rect: null,
+        anchorEl: null,
+        panelEl: null,
+        filters: { project: true, global: false, agent: false },
+        catalog: [],
+        cwd: undefined,
+        skillsStatus: 'idle',
+        skillsError: null,
+        presets: [],
+        presetsStatus: 'idle',
+        presetsError: null,
+        agentBusy: undefined,
+        notice: null,
+        insertSkill: null
+      };
+      const listeners = new Set();
+      function emit() {
+        for (const listener of Array.from(listeners)) {
+          try {
+            listener();
+          } catch {
+            // 单个订阅者异常不影响其他订阅者。
+          }
+        }
+      }
+      function setState(patch) {
+        Object.assign(state, patch);
+        emit();
+      }
+      function subscribe(listener) {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      }
+      function close() {
+        if (!state.open) return;
+        setState({ open: false, panelEl: null, anchorEl: null });
+      }
+
+      /** 会话摘要（含 cwd / blank）。 */
+      function sessionSummary(sessionId) {
         try {
-          const snapshot = sessions.list?.getSnapshot?.();
-          const cwd = snapshot?.byId?.[sessionId]?.cwd;
-          if (typeof cwd !== 'string' || cwd === '') return undefined;
-          return cwd.replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase();
+          return sessions.list?.getSnapshot?.()?.byId?.[sessionId];
         } catch {
           return undefined;
         }
       }
 
       /**
-       * 判断一个技能文件是否属于该会话的项目。
-       * 项目根是 cwd 的祖先（DSH 用最近的含 `.git` 的祖先目录）；因此取
-       * `.agents/skills` 或 `.dsh/skills` 之前的目录前缀，只有它是 cwd 本身或
-       * cwd 的祖先才算项目技能——用户级 `<home>/.agents/skills` 便会被排除。
-       * @param {string | undefined} path - SKILL.md 的绝对路径。
+       * 判断技能是否属于当前项目：取 `.agents/skills` / `.dsh/skills` 之前的目录作为
+       * 项目根，只有它等于 cwd 或是 cwd 的祖先才算项目技能。
+       * 没有 path 的条目（bundled / runtime 提供的技能）无法证明属于项目 → 归为全局。
+       * @param {object} skill - skills/list 条目。
        * @param {string | undefined} cwd - 规范化后的会话 cwd。
        * @returns {boolean} 是否属于当前项目。
        */
-      function isProjectSkill(path, cwd) {
-        if (cwd === undefined) return true;
-        if (typeof path !== 'string' || path === '') return true;
-        const normalized = path.replace(/\\/g, '/').toLowerCase();
-        for (const marker of PROJECT_SKILL_DIRS) {
-          let at = normalized.indexOf(marker);
-          while (at >= 0) {
-            const root = normalized.slice(0, at);
-            if (root !== '' && (cwd === root || cwd.startsWith(`${root}/`))) return true;
-            at = normalized.indexOf(marker, at + 1);
+      function isProjectSkill(skill, cwd) {
+        if (cwd === undefined) return false;
+        const path = normalizePath(skill?.path);
+        if (path === undefined) return false;
+        for (const marker of PROJECT_MARKERS) {
+          let at = path.indexOf(marker);
+          while (at > 0) {
+            const root = path.slice(0, at);
+            if (cwd === root || cwd.startsWith(`${root}/`)) return true;
+            at = path.indexOf(marker, at + 1);
           }
         }
         return false;
       }
 
-      /**
-       * 拉取当前项目的自定义技能。
-       * 与内置 ui-skill 相同：要求会话已被保留且历史已打开，用临时引用持住会话
-       * 直到 RPC 结束，避免会话在请求途中被回收。
-       * @param {string} sessionId - 会话 id。
-       * @param {AbortSignal} signal - 取消信号（组件卸载 / 会话切换时中止）。
-       * @returns {Promise<Array<object>>} 过滤后的技能摘要。
-       */
-      async function listProjectSkills(sessionId, signal) {
-        // 子代理会话没有可选的技能目录，返回空列表而不是报错。
-        if (sessions.subagentAddress(sessionId) !== undefined) return [];
+      /** 是否随包内置（没有 path，或路径落在 app.asar 内）。 */
+      function isBuiltinSkill(skill) {
+        const path = normalizePath(skill?.path);
+        return path === undefined || path.includes('/app.asar');
+      }
+
+      /** 拉取技能目录（不分类，分类在渲染时做）。 */
+      async function fetchSkills(sessionId, signal) {
+        if (sessions.subagentAddress(sessionId) !== undefined) {
+          return { list: [], cwd: undefined };
+        }
         if (sessions.binding(sessionId) === undefined) {
           throw new Error(`composer-skill-picker: session "${sessionId}" is not retained`);
         }
-        return sessions.using(sessionId, { source: 'projectSkillCatalog', signal }, async (reference) => {
+        return sessions.using(sessionId, { source: 'composerSkillPicker', signal }, async (reference) => {
           signal.throwIfAborted();
-          const state = reference.binding.session.getSnapshot();
-          if (state.openState !== 'open') {
-            throw state.openError ?? new Error(`composer-skill-picker: session "${sessionId}" is not open`);
+          const snapshot = reference.binding.session.getSnapshot();
+          if (snapshot.openState !== 'open') {
+            throw snapshot.openError ?? new Error(`composer-skill-picker: session "${sessionId}" is not open`);
           }
           const result = await skills.list({ sessionId }, signal);
           signal.throwIfAborted();
           if (!result.ok) {
             throw new Error(`skills/list failed: ${result.error.code}: ${result.error.message}`);
           }
-          const catalog = result.value.skills;
-          const cwd = sessionCwd(sessionId);
-          // 提供方不带 path（或拿不到 cwd）时不做归属过滤，避免列表莫名其妙为空。
-          if (cwd === undefined || catalog.every((skill) => typeof skill.path !== 'string')) {
-            return catalog;
-          }
-          return catalog.filter((skill) => isProjectSkill(skill.path, cwd));
+          return {
+            list: result.value.skills,
+            cwd: normalizePath(sessionSummary(sessionId)?.cwd)
+          };
         });
       }
 
-      /**
-       * 常驻下拉框：会话打开后自动加载项目技能，选中即插入 `/名字 `。
-       * @param {object} props - 标准插槽 props（sessionId、inputActions）。
-       */
-      function SkillSelect(props) {
-        const sessionId = props.sessionId;
-        const actions = props.inputActions;
-        const [items, setItems] = React.useState([]);
-        const [status, setStatus] = React.useState('loading');
-
-        // 会话变化时重新发现项目技能；卸载/切换时中止在途请求。
-        React.useEffect(() => {
-          if (typeof sessionId !== 'string' || sessionId === '') return undefined;
-          let live = true;
-          const abort = new AbortController();
-          setItems([]);
-          setStatus('loading');
-          listProjectSkills(sessionId, abort.signal).then((list) => {
-            if (!live) return;
-            setItems(list.slice().sort((left, right) => left.name.localeCompare(right.name)));
-            setStatus('ready');
-          }, () => {
-            if (live) setStatus('error');
+      let skillsAbort;
+      /** 加载会话可见的技能目录。 */
+      async function loadSkills(sessionId) {
+        if (typeof sessionId !== 'string' || sessionId === '') return;
+        if (skillsAbort !== undefined) skillsAbort.abort();
+        const abort = new AbortController();
+        skillsAbort = abort;
+        setState({ skillsStatus: 'loading', skillsError: null });
+        try {
+          const { list, cwd } = await fetchSkills(sessionId, abort.signal);
+          if (abort.signal.aborted) return;
+          setState({ catalog: list, cwd, skillsStatus: 'ready' });
+        } catch (error) {
+          if (abort.signal.aborted) return;
+          setState({
+            skillsStatus: 'error',
+            skillsError: String((error && error.message) || error)
           });
-          return () => {
-            live = false;
-            abort.abort();
-          };
-        }, [sessionId]);
+        }
+      }
 
-        const placeholder = status === 'loading'
-          ? t('loading')
-          : status === 'error'
-            ? t('error')
-            : items.length === 0 ? t('empty') : t('label');
-        const disabled = status !== 'ready' || items.length === 0 || actions === undefined;
+      /** Agent preset 远端命名空间（可能不存在）。 */
+      function presetRemote() {
+        try {
+          return ctx.remote?.agentPresets;
+        } catch {
+          return undefined;
+        }
+      }
 
-        /**
-         * 选中一个技能：把 `/名字 ` 写回草稿并交还输入焦点。
-         * @param {object} event - 原生 change 事件。
-         */
-        const onChange = (event) => {
-          const name = event.target.value;
-          if (name === '' || actions === undefined) return;
+      /** 加载 agent preset 花名册。 */
+      async function loadPresets() {
+        const remote = presetRemote();
+        if (remote === undefined || typeof remote.list !== 'function') {
+          setState({ presetsStatus: 'unavailable', presets: [] });
+          return;
+        }
+        setState({ presetsStatus: 'loading', presetsError: null });
+        try {
+          const result = await remote.list();
+          const value = result && result.ok === true ? result.value : result;
+          if (result && result.ok === false) {
+            const code = result.error && result.error.code;
+            if (code === 'gateway/invocation-unavailable') {
+              setState({ presetsStatus: 'unavailable', presets: [] });
+              return;
+            }
+            throw new Error(result.error?.message ?? code ?? 'agentPresets/list failed');
+          }
+          const presets = Array.isArray(value?.presets) ? value.presets.slice() : [];
+          presets.sort(byName);
+          setState({ presets, presetsStatus: 'ready' });
+        } catch (error) {
+          setState({
+            presetsStatus: 'error',
+            presetsError: String((error && error.message) || error)
+          });
+        }
+      }
+
+      /** 切换 Agent preset（仅空白会话可成功）。 */
+      async function pickAgent(presetId) {
+        const remote = presetRemote();
+        if (remote === undefined || typeof remote.select !== 'function') {
+          setState({ notice: { kind: 'error', text: t('agentUnavailable') } });
+          return;
+        }
+        setState({ notice: null, agentBusy: presetId });
+        try {
+          const result = await remote.select(state.sessionId, presetId);
+          if (result && result.ok === true) {
+            const preset = state.presets.find((item) => item.id === presetId);
+            setState({
+              agentBusy: undefined,
+              notice: { kind: 'success', text: `${t('agentApplied')}: ${preset?.name ?? presetId}` }
+            });
+            await loadPresets();
+            return;
+          }
+          const code = result?.error?.code;
+          const text = code === 'agent-preset/locked'
+            ? t('agentLocked')
+            : String(result?.error?.message ?? code ?? t('agentFailed'));
+          setState({ agentBusy: undefined, notice: { kind: 'error', text } });
+        } catch (error) {
+          setState({
+            agentBusy: undefined,
+            notice: { kind: 'error', text: String((error && error.message) || error) }
+          });
+        }
+      }
+
+      /** 把 `/名字 ` 插入草稿并交还输入焦点。 */
+      function insertSkill(name) {
+        const actions = state.insertSkill;
+        if (actions === undefined || actions === null) return;
+        try {
           const span = actions.captureInsertion();
           if (span === undefined || actions.insertText(`/${name} `, span) !== true) {
             const fresh = actions.captureInsertion();
             if (fresh !== undefined) actions.insertText(`/${name} `, fresh);
           }
-          // 选择器拿到焦点后交还输入框，用户可继续打字。
+        } finally {
+          const sessionId = state.sessionId;
+          close();
           try {
             const actx = sessions.scope(sessionId);
             if (actx !== undefined) ctx.get('conversation')?.input?.for?.(actx)?.focus?.();
           } catch {
-            // 焦点回填是尽力而为，失败不影响插入。
+            // 焦点回填是尽力而为。
           }
-        };
+        }
+      }
 
-        return h('select', {
-          className: 'cskp-select',
-          title: t('title'),
-          'aria-label': t('title'),
-          value: '',
-          disabled,
-          onChange
-        }, [
-          h('option', { key: 'placeholder', value: '', disabled: true }, placeholder),
-          ...items.map((skill) => h('option', {
-            key: skill.name,
-            value: skill.name,
-            title: skill.description
-          }, skill.name))
+      /** 分组：项目 / 全局。 */
+      function classify() {
+        const project = [];
+        const global = [];
+        for (const skill of state.catalog) {
+          if (isProjectSkill(skill, state.cwd)) project.push(skill);
+          else global.push(skill);
+        }
+        project.sort(byName);
+        global.sort(byName);
+        return { project, global };
+      }
+
+      // ------------------------------------------------------------ views
+      /** 复选框。 */
+      function filterCheck(key, label, count) {
+        return h('label', { key: `f:${key}`, className: 'cskp-check' }, [
+          h('input', {
+            type: 'checkbox',
+            checked: state.filters[key] === true,
+            onChange: () => {
+              const filters = Object.assign({}, state.filters, { [key]: state.filters[key] !== true });
+              setState({ filters, notice: null });
+              if (key === 'agent' && filters.agent && state.presetsStatus === 'idle') loadPresets();
+            }
+          }),
+          h('span', null, label),
+          h('span', { className: 'cskp-count' }, String(count))
         ]);
       }
 
-      // 注册到工具行（`+` 之后）。order 80 让下拉框排在 file-tree-context-menu 的
-      // 隐形 bridge（90）之前，保持靠左。
+      /** 技能行。 */
+      function skillRow(skill, withBadge) {
+        const tone = isBuiltinSkill(skill) ? t('builtin') : t('user');
+        return h('button', {
+          key: `s:${skill.name}`,
+          type: 'button',
+          className: 'cskp-row',
+          title: skill.whenToUse ?? skill.description ?? skill.name,
+          onClick: () => insertSkill(skill.name)
+        }, [
+          h('span', { key: 'line', className: 'cskp-line' }, [
+            h('span', { key: 'name', className: 'cskp-name' }, skill.name),
+            withBadge
+              ? h('span', { key: 'badge', className: 'cskp-badge' }, tone)
+              : null
+          ]),
+          skill.description !== undefined && skill.description !== ''
+            ? h('span', { key: 'meta', className: 'cskp-meta' }, skill.description)
+            : null
+        ]);
+      }
+
+      /** Agent preset 行。 */
+      function agentRow(preset) {
+        const broken = typeof preset.broken === 'string' && preset.broken !== '';
+        const locked = state.sessionBlank === false;
+        return h('button', {
+          key: `a:${preset.id}`,
+          type: 'button',
+          className: 'cskp-row',
+          disabled: broken || locked || state.agentBusy === preset.id || state.presetsStatus !== 'ready',
+          title: broken ? preset.broken : (preset.description ?? preset.id),
+          onClick: () => pickAgent(preset.id)
+        }, [
+          h('span', { key: 'line', className: 'cskp-line' }, [
+            h('span', { key: 'name', className: 'cskp-name' }, preset.name ?? preset.id),
+            preset.isDefault === true
+              ? h('span', { key: 'default', className: 'cskp-badge' }, t('agentDefault'))
+              : null,
+            broken ? h('span', { key: 'broken', className: 'cskp-badge', 'data-tone': 'error' }, t('agentBroken')) : null
+          ]),
+          preset.description !== undefined && preset.description !== ''
+            ? h('span', { key: 'meta', className: 'cskp-meta' }, preset.description)
+            : null
+        ]);
+      }
+
+      /** 浮层面板。 */
+      function SkillPanel() {
+        const [, force] = React.useState(0);
+        React.useEffect(() => subscribe(() => force((value) => value + 1)), []);
+
+        const open = state.open;
+        React.useEffect(() => {
+          if (!open) return undefined;
+          const onKeyDown = (event) => {
+            if (event.key === 'Escape') {
+              event.stopPropagation();
+              close();
+            }
+          };
+          const onPointerDown = (event) => {
+            const target = event.target;
+            if (state.panelEl !== null && state.panelEl.contains(target)) return;
+            if (state.anchorEl !== null && state.anchorEl.contains(target)) return;
+            close();
+          };
+          const onViewportChange = () => close();
+          document.addEventListener('keydown', onKeyDown, true);
+          document.addEventListener('pointerdown', onPointerDown, true);
+          window.addEventListener('resize', onViewportChange);
+          return () => {
+            document.removeEventListener('keydown', onKeyDown, true);
+            document.removeEventListener('pointerdown', onPointerDown, true);
+            window.removeEventListener('resize', onViewportChange);
+          };
+        }, [open]);
+
+        if (!open || state.rect === null) return null;
+
+        const width = Math.min(PANEL_WIDTH, window.innerWidth - 24);
+        const left = Math.max(8, Math.min(state.rect.left, window.innerWidth - width - 12));
+        const bottom = Math.max(8, window.innerHeight - state.rect.top + 8);
+        const style = { left: `${left}px`, bottom: `${bottom}px`, width: `${width}px` };
+
+        const { project, global } = classify();
+        const filters = state.filters;
+
+        const body = [];
+        if (!filters.project && !filters.global && !filters.agent) {
+          body.push(h('div', { key: 'pick', className: 'cskp-empty' }, t('emptyPick')));
+        }
+        if (filters.project) {
+          body.push(h('div', { key: 'p:title', className: 'cskp-group' }, t('project')));
+          if (state.skillsStatus === 'loading' || state.skillsStatus === 'idle') {
+            body.push(h('div', { key: 'p:loading', className: 'cskp-empty' }, t('loading')));
+          } else if (state.skillsStatus === 'error') {
+            body.push(h('div', { key: 'p:error', className: 'cskp-empty' }, `${t('error')}: ${state.skillsError ?? ''}`));
+          } else if (project.length === 0) {
+            body.push(h('div', { key: 'p:empty', className: 'cskp-empty' }, t('emptyProject')));
+          } else {
+            body.push(...project.map((skill) => skillRow(skill, false)));
+          }
+        }
+        if (filters.global) {
+          body.push(h('div', { key: 'g:title', className: 'cskp-group' }, t('global')));
+          if (state.skillsStatus === 'loading' || state.skillsStatus === 'idle') {
+            body.push(h('div', { key: 'g:loading', className: 'cskp-empty' }, t('loading')));
+          } else if (state.skillsStatus === 'error') {
+            body.push(h('div', { key: 'g:error', className: 'cskp-empty' }, `${t('error')}: ${state.skillsError ?? ''}`));
+          } else if (global.length === 0) {
+            body.push(h('div', { key: 'g:empty', className: 'cskp-empty' }, t('emptyGlobal')));
+          } else {
+            body.push(...global.map((skill) => skillRow(skill, true)));
+          }
+        }
+        if (filters.agent) {
+          body.push(h('div', { key: 'a:title', className: 'cskp-group' }, t('agent')));
+          if (state.presetsStatus === 'loading' || state.presetsStatus === 'idle') {
+            body.push(h('div', { key: 'a:loading', className: 'cskp-empty' }, t('loading')));
+          } else if (state.presetsStatus === 'unavailable') {
+            body.push(h('div', { key: 'a:unavailable', className: 'cskp-empty' }, t('agentUnavailable')));
+          } else if (state.presetsStatus === 'error') {
+            body.push(h('div', { key: 'a:error', className: 'cskp-empty' }, `${t('error')}: ${state.presetsError ?? ''}`));
+          } else if (state.presets.length === 0) {
+            body.push(h('div', { key: 'a:empty', className: 'cskp-empty' }, t('emptyAgent')));
+          } else {
+            body.push(...state.presets.map((preset) => agentRow(preset)));
+          }
+        }
+
+        const children = [
+          h('div', { key: 'filters', className: 'cskp-filters' }, [
+            filterCheck('project', t('project'), project.length),
+            filterCheck('global', t('global'), global.length),
+            filterCheck('agent', t('agent'), state.presets.length)
+          ])
+        ];
+        if (filters.agent && state.sessionBlank === false) {
+          children.push(h('div', { key: 'hint', className: 'cskp-hint' }, t('agentLocked')));
+        }
+        children.push(h('div', { key: 'list', className: 'cskp-list' }, body));
+        if (state.notice !== null) {
+          children.push(h('div', {
+            key: 'notice',
+            className: 'cskp-notice',
+            'data-kind': state.notice.kind
+          }, state.notice.text));
+        }
+
+        return h('div', {
+          className: 'cskp-panel',
+          style,
+          ref: (element) => {
+            state.panelEl = element;
+          }
+        }, children);
+      }
+
+      /** 工具行里的短按钮。 */
+      function SkillTrigger(props) {
+        const [, force] = React.useState(0);
+        React.useEffect(() => subscribe(() => force((value) => value + 1)), []);
+
+        const sessionId = props.sessionId;
+        const actions = props.inputActions;
+
+        React.useEffect(() => {
+          state.insertSkill = actions === undefined || actions === null ? null : actions;
+          return () => {
+            state.insertSkill = null;
+          };
+        }, [actions]);
+
+        React.useEffect(() => {
+          if (sessionId === state.sessionId) return;
+          close();
+          setState({
+            sessionId,
+            sessionBlank: sessionSummary(sessionId)?.blank !== false,
+            catalog: [],
+            cwd: undefined,
+            skillsStatus: 'idle',
+            notice: null
+          });
+          loadSkills(sessionId);
+        }, [sessionId]);
+
+        const onClick = (event) => {
+          if (state.open) {
+            close();
+            return;
+          }
+          const rect = event.currentTarget.getBoundingClientRect();
+          setState({
+            open: true,
+            rect: { left: rect.left, top: rect.top },
+            anchorEl: event.currentTarget,
+            sessionId,
+            sessionBlank: sessionSummary(sessionId)?.blank !== false,
+            notice: null
+          });
+          if (state.skillsStatus === 'idle' || state.skillsStatus === 'error') loadSkills(sessionId);
+          if (state.filters.agent) loadPresets();
+        };
+
+        return h('button', {
+          type: 'button',
+          className: 'cskp-trigger',
+          'data-open': state.open ? 'true' : 'false',
+          title: t('title'),
+          'aria-label': t('title'),
+          'aria-haspopup': 'dialog',
+          'aria-expanded': state.open ? 'true' : 'false',
+          onClick
+        }, [
+          h('span', { key: 'label', className: 'cskp-trigger-label' }, t('label')),
+          h('span', { key: 'chevron', className: 'cskp-chevron' })
+        ]);
+      }
+
+      // 触发器在工具行（`+` 之后）；面板挂在 frame 级浮层，避免被输入框容器裁剪。
       ctx.slots.inject('conversation.input.left', () => ctx.slots.register({
         name: 'conversation.input.left',
         id: 'composer-skill-picker',
         order: 80
-      }, SkillSelect));
+      }, SkillTrigger));
+      ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+        name: 'shell.overlay',
+        id: 'composer-skill-picker-panel',
+        order: 900
+      }, SkillPanel));
     }
 
     return { inject: ['slots', 'locale', 'sessions', 'remote', 'remote.skills'], apply };
