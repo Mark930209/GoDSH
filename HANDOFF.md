@@ -111,11 +111,24 @@ GoDSH/
     agent 忙碌/已销毁时跳过；插件卸载清空全部待发定时器。
   - 不 import 任何 `@deepseek-ai/*`：`inject = ['agents']`，续跑消息按 `createUserMessage` 的
     形状（`{id, role:'user', content, source}` + 深冻结）自行构造，避免跨 bundle 解析问题。
-  - 测试：`test/auto-retry.test.mjs` 用假 Cordis 上下文重放真实事件负载，**11 项全部通过**。
+  - 测试：`test/auto-retry.test.mjs` 用假 Cordis 上下文重放真实事件负载，**13 项全部通过**。
   - 已 `install_bundle` → `application: applied`；`list_bundles` 显示 `installed/enabled: true`，
     `list_plugins` 行 `include:auto-retry` 为 **`fiberPhase: active`**（运行时已加载）。
-  - **未发布**：用户 2026-11-03 明确「先安装，先都不发布」→ 未 bump、未打 tag、未建 Release、
-    未刷新市场索引（索引仍只有 file-tree-context-menu 1.0.0）。发版需用户再次明确要求。
+  - **可见的重试提示**（2026-11-04 追加）：重试前写 `llm/retry`、等待结束写 `llm/retry-started`
+    会话事件，复用宿主 `client-ui-chat` 的 `RetryNodeView`，对话里出现
+    「正在重试模型请求（1/6） · 3s」这一行（倒计时、可展开看失败原因与延迟、停止后变「已取消」）。
+    同一 `turn/step` 共用 `retryId`（同 `turn/step` 内累加），`policyKey` 用 `auto-retry`
+    避免与内置 `llm-retry` 的计数互相干扰；`session.append` 抛错只记日志、不取消重试。
+  - **已发布（2026-11-04）**：`auto-retry-v1.0.0`，GitHub Release 已建，
+    索引指向提交 `85c49bd`。
+- [x] **三个插件全部发布（2026-11-04，用户要在其他机器安装）**：
+  - `file-tree-context-menu` 1.0.0 → tag `3abb8bc`（此前已发）
+  - `auto-retry` 1.0.0 → tag `85c49bd`
+  - `composer-skill-picker` 1.0.0 → tag `d8be5ce`
+  - 远端 `main` = `bb2a45f`；索引 3 条，GitHub Pages 已更新
+    （https://mark930209.github.io/GoDSH/market-index.json 实测 200，3 个插件）。
+  - 注意：本次之前的 10 个提交（composer 功能、auto-retry、发布脚本修复）此前**从未推送**，
+    已随本次一起推上 `main`；远端曾因 CI 刷索引领先 1 个提交，已 rebase 解决。
 - [x] **发布机制改为「单插件独立发布」**（2026-11-04，用户质疑「为什么发一个必须全都发」）：
   - 根因：索引是全仓库一份 JSON，原脚本给**每个**插件写同一个 `commit`（默认 HEAD）和同一个
     时间戳（默认"现在"），于是重生成索引 = 把其他插件指向最新 HEAD、更新时间改成现在，
@@ -170,11 +183,32 @@ cd E:\Projects\DSH_Plugins_Dev
 node scripts\new-plugin.mjs dsh-xxx                              # 新插件（自动套 repo.config.json）
 node scripts\validate-plugins.mjs [--plugin <name>] [--since origin/main]
 node scripts\release.mjs <name> patch "变更摘要" [--push]         # 仅用户明确要求时发版
+node scripts\release.mjs <name> tag-only "首个版本" [--push]      # 版本已是 X.Y.Z、只补 tag
 node scripts\make-market-index.mjs                               # 手动刷新索引
 # 安装（让 agent 执行）: plugin_manager install_bundle target=<插件绝对路径>
 # 重启 DeepSeek Harness（托盘退出再开）验证
 git push origin HEAD --follow-tags
 ```
+
+### 在其他机器安装（走市场索引）
+
+```text
+1. 启用插件市场 bundle：@deepseek-ai/dsh-experimental-plugin-market-bundle（默认关闭）
+   Web 侧边栏 Plugins 页 → 或 patch 里加 include 行 → 重载
+2. 添加索引 URL：https://mark930209.github.io/GoDSH/market-index.json
+3. Discover → 安装 auto-retry / composer-skill-picker / file-tree-context-menu
+4. 重启 DSH，确认 Plugins 页对应条目为 active
+```
+
+也可以跳过市场，直接按 git 规格装单个插件（`<commit>` 用索引里该插件的值）：
+
+```powershell
+# 例：auto-retry 1.0.0
+git+https://github.com/Mark930209/GoDSH.git#85c49bd55b9e6bf65fa33ad35b5ed867a4a7b020&path:/plugins/auto-retry
+```
+
+其他机器要跑 `auto-retry` 的**可见重试提示**，宿主版本需含 `client-ui-chat` 的 `RetryNodeView`
+（0.2.1-rc.5 已有；`engines.dsh` 已声明 `>=0.2.1-rc.5`，旧版本装不上会直接报错）。
 
 ## 6. 恢复记录（2026-11-03 误删事故）
 
