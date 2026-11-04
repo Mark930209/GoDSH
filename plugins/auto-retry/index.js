@@ -15,10 +15,20 @@
  *      a bounded number of consecutive resumes. A turn that ends any other way
  *      resets that budget.
  *
- * The plugin only observes durable session facts and public agent methods; it
- * appends no session event of its own.
+ * The plugin only observes durable session facts and public agent methods. The
+ * only session events it appends are the host-rendered `llm/retry` /
+ * `llm/retry-started` notices that make a retry visible in the conversation.
  */
 import { randomUUID } from 'node:crypto';
+
+/**
+ * Retry-policy identity written into `llm/retry`.
+ *
+ * The built-in `llm-retry` plugin keys its own retry counter on
+ * `[provider, policyKey]`; a distinct key keeps this plugin's visible chain
+ * from being counted against — or cancelled by — the provider policy budget.
+ */
+const RETRY_POLICY_KEY = 'auto-retry';
 
 /** Failure codes that a later attempt cannot fix. */
 const FATAL_CODE_PATTERNS = [
@@ -204,6 +214,8 @@ export function apply(ctx, config) {
   const timers = new Set();
   /** sessionId -> Map<"turn:step", retriesUsed>. */
   const requestAttempts = new Map();
+  /** sessionId -> { key, retryId }: one visible retry chain per turn/step. */
+  const retryChains = new Map();
   /** sessionId -> { consecutive, timer }. */
   const resumeState = new Map();
 
@@ -212,6 +224,57 @@ export function apply(ctx, config) {
       ctx.logger[level](`[auto-retry] ${message}`);
     } catch (_error) {
       // A missing logger must never break the recovery path.
+    }
+  };
+
+  /**
+   * Publish a visible retry row in the conversation.
+   *
+   * The Chat surface already renders `llm/retry` / `llm/retry-started` as a
+   * "Retrying model request (n/max) · Ns" row with the failure reason and the
+   * delay in its expandable body. Writing those events is the only sanctioned
+   * way to make a Host-side retry visible, and it costs no model tokens: they
+   * are session events, not messages.
+   */
+  const announceRetry = (agent, payload, retry, maxRetries, delayMs) => {
+    const session = agent.session;
+    if (session === null || typeof session !== 'object' || typeof session.append !== 'function') return undefined;
+    const key = `${payload.turn}:${payload.step}`;
+    let chain = retryChains.get(agent.id);
+    if (chain === undefined || chain.key !== key) {
+      chain = { key, retryId: randomUUID() };
+      retryChains.set(agent.id, chain);
+    }
+    try {
+      session.append('llm/retry', {
+        retryId: chain.retryId,
+        turn: payload.turn,
+        step: payload.step,
+        provider: payload.provider,
+        mode: 'normal',
+        policyKey: RETRY_POLICY_KEY,
+        retry,
+        maxRetries,
+        delayMs,
+        failure: payload.failure
+      });
+    } catch (thrown) {
+      // Feedback is a courtesy; losing it must never cancel the retry.
+      note('info', `agent "${agent.id}": could not publish retry notice: ${String(thrown)}`);
+      return undefined;
+    }
+    return chain.retryId;
+  };
+
+  /** Flip the retry row from "waiting" to "retried" once the wait elapsed. */
+  const announceRetryStarted = (agent, payload, retry, retryId) => {
+    if (retryId === undefined) return;
+    const session = agent.session;
+    if (session === null || typeof session !== 'object' || typeof session.append !== 'function') return;
+    try {
+      session.append('llm/retry-started', { retryId, turn: payload.turn, step: payload.step, retry });
+    } catch (_error) {
+      // Same: purely cosmetic.
     }
   };
 
@@ -315,8 +378,10 @@ export function apply(ctx, config) {
 
       const delay = requestDelay(used, failure, options);
       note('warn', `agent "${agent.id}": model request failed (${describeFailure(failure)}); retry ${used}/${options.maxRequestRetries} in ${delay}ms`);
+      const retryId = announceRetry(agent, payload, used, options.maxRequestRetries, delay);
       const elapsed = await sleep(delay, signal);
       if (!elapsed) return next();
+      announceRetryStarted(agent, payload, used, retryId);
       return { kind: 'retry' };
     });
 
@@ -329,6 +394,7 @@ export function apply(ctx, config) {
       const reason = event.data !== null && typeof event.data === 'object' ? event.data.reason : undefined;
       const kind = reason !== null && typeof reason === 'object' ? reason.kind : undefined;
       requestAttempts.delete(sessionId);
+      retryChains.delete(sessionId);
       if (kind === 'error') {
         scheduleResume(agent, reason);
         return;
@@ -350,6 +416,7 @@ export function apply(ctx, config) {
       if (state !== undefined) clearResumeTimer(state);
       resumeState.delete(agent.id);
       requestAttempts.delete(agent.id);
+      retryChains.delete(agent.id);
     });
 
     note('info', `active (request retries ${options.maxRequestRetries}, consecutive resumes ${options.maxConsecutiveResumes})`);
@@ -358,6 +425,7 @@ export function apply(ctx, config) {
       for (const timer of timers) clearTimeout(timer);
       timers.clear();
       requestAttempts.clear();
+      retryChains.clear();
       resumeState.clear();
     };
   }, 'auto-retry: recovery layers');

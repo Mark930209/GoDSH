@@ -12,9 +12,15 @@ import { apply, inject, name } from '../index.js';
 /** Minimal stand-in for the Cordis context the Host half touches. */
 function makeContext(sessionId = 'session-1') {
   const listeners = new Map();
+  const appended = [];
   const agent = {
     id: sessionId,
-    session: { id: sessionId },
+    session: {
+      id: sessionId,
+      append(type, data) {
+        appended.push({ type, data });
+      }
+    },
     status: 'idle',
     followups: [],
     followup(message) {
@@ -43,7 +49,7 @@ function makeContext(sessionId = 'session-1') {
   function emit(event, ...args) {
     for (const handler of listeners.get(event) ?? []) handler(...args);
   }
-  return { ctx, agent, emit, listeners };
+  return { ctx, agent, emit, listeners, appended };
 }
 
 /** One dispatched model-request failure. */
@@ -88,6 +94,46 @@ test('retries a transient request failure until the budget is spent', async () =
   assert.deepEqual(await retry(payload, next), { kind: 'retry' });
   assert.equal(await retry(payload, next), undefined);
   assert.equal(delegated, 1, 'only the exhausted attempt reaches the default action');
+});
+
+test('publishes a visible llm/retry notice so the retry is not a silent stall', async () => {
+  const { ctx, agent, listeners, appended } = makeContext();
+  apply(ctx, { initialRetryDelayMs: 1, maxRetryDelayMs: 2, jitterRatio: 0, maxRequestRetries: 3 });
+  const [retry] = listeners.get('agent/request-error');
+  const payload = requestFailure(agent);
+
+  assert.deepEqual(await retry(payload, async () => undefined), { kind: 'retry' });
+
+  assert.deepEqual(appended.map((entry) => entry.type), ['llm/retry', 'llm/retry-started']);
+  const [scheduled, started] = appended;
+  // Shape mirrors what @deepseek-ai/dsh-llm-retry writes, so the built-in
+  // RetryNodeView renders it as "正在重试模型请求（1/3） · Ns".
+  assert.equal(scheduled.data.mode, 'normal');
+  assert.equal(scheduled.data.retry, 1);
+  assert.equal(scheduled.data.maxRetries, 3);
+  assert.equal(scheduled.data.turn, 1);
+  assert.equal(scheduled.data.step, 1);
+  assert.equal(scheduled.data.provider, 'deepseek');
+  assert.ok(scheduled.data.delayMs >= 1);
+  assert.equal(scheduled.data.failure.code, 'RATE_LIMIT');
+  assert.equal(typeof scheduled.data.retryId, 'string');
+  // A second attempt joins the same chain instead of opening a new row.
+  await retry(payload, async () => undefined);
+  assert.equal(appended[2].data.retryId, scheduled.data.retryId);
+  assert.equal(appended[2].data.retry, 2);
+  assert.equal(started.data.retry, 1);
+  assert.equal(started.data.retryId, scheduled.data.retryId);
+});
+
+test('a broken session.append cannot cancel the retry', async () => {
+  const { ctx, agent, listeners } = makeContext();
+  agent.session.append = () => {
+    throw new Error('session is closed');
+  };
+  apply(ctx, { initialRetryDelayMs: 1, maxRetryDelayMs: 2, jitterRatio: 0, maxRequestRetries: 2 });
+  const [retry] = listeners.get('agent/request-error');
+
+  assert.deepEqual(await retry(requestFailure(agent), async () => undefined), { kind: 'retry' });
 });
 
 test('never retries an authoritative or aborted failure', async () => {
