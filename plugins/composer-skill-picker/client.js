@@ -12,7 +12,7 @@
  * 选中即把 `/技能名 ` 插入草稿（与内置 ui-skill 的 onPick 一致），发送时由宿主解析。
  */
 window.__ModuleLoader__.load({
-  id: '@local/composer-skill-picker',
+  id: 'dsh-composer-skill-picker',
   factory(require) {
     const React = require('react');
     const h = React.createElement;

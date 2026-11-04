@@ -1,6 +1,6 @@
-# @local/auto-retry · 自动重试与续跑
+# dsh-auto-retry · 自动重试与续跑
 
-某一轮运行失败后自动恢复，直到任务完成或达到次数上限。**Host-only 策略插件**，没有 UI 界面，也不写入任何自己的会话事件。
+某一轮运行失败后自动恢复，直到任务完成或达到次数上限。**Host-only 策略插件**，没有自己的 UI 界面；重试时复用宿主的重试提示行。
 
 ## 解决什么问题
 
@@ -43,7 +43,7 @@ DSH 的默认行为是：一次模型请求失败就结束当前轮次，agent �
 ```yaml
 - insert:
     - id: auto-retry
-      name: '@local/auto-retry'
+      name: 'dsh-auto-retry'
       config:
         enabled: true
         maxRequestRetries: 6

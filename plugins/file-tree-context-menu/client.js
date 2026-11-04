@@ -31,7 +31,7 @@
  * (workspace-relative, trailing `/` for folders, quoted on whitespace).
  */
 window.__ModuleLoader__.load({
-  id: '@local/file-tree-context-menu',
+  id: 'dsh-file-tree-context-menu',
   factory(require) {
     const React = require('react');
     const h = React.createElement;
@@ -149,7 +149,7 @@ window.__ModuleLoader__.load({
     };
 
     // ------------------------------------------------------------------ css
-    const CSS_TAG_ID = '@local/file-tree-context-menu/style';
+    const CSS_TAG_ID = 'dsh-file-tree-context-menu/style';
     const CSS = [
       '.ftcm-panel{position:fixed;z-index:100000;min-width:196px;padding:4px;',
       'box-sizing:border-box;border-radius:8px;background:var(--dsw-alias-bg-overlay);',
@@ -195,7 +195,7 @@ window.__ModuleLoader__.load({
       const existing = document.querySelector('style[data-plugin-css=' + JSON.stringify(CSS_TAG_ID) + ']');
       if (existing !== null) return () => {};
       const tag = document.createElement('style');
-      tag.dataset.plugin = '@local/file-tree-context-menu';
+      tag.dataset.plugin = 'dsh-file-tree-context-menu';
       tag.dataset.pluginCss = CSS_TAG_ID;
       tag.textContent = css;
       document.head.appendChild(tag);

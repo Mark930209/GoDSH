@@ -1,8 +1,7 @@
 {
-  "name": "@local/file-tree-context-menu",
-  "version": "1.0.0",
+  "name": "dsh-file-tree-context-menu",
+  "version": "1.0.1",
   "description": "Right-click files or folders in the workspace file tree and deliverable lists to add them to the conversation, copy paths/links, preview in DSH, open in a terminal, summarize with AI, create/rename/delete entries, or reveal them in the file manager.",
-  "private": true,
   "type": "module",
   "author": "Mark930209 <guimaxingtian@163.com>",
   "license": "MIT",

@@ -1,7 +1,6 @@
 {
-  "name": "@local/auto-retry",
-  "version": "1.0.0",
-  "private": true,
+  "name": "dsh-auto-retry",
+  "version": "1.0.1",
   "type": "module",
   "description": "Retries a failed model request with exponential backoff, then resumes the same session after a delay when a round still fails, until the task completes or a bounded attempt budget is spent.",
   "author": "Mark930209 <guimaxingtian@163.com>",

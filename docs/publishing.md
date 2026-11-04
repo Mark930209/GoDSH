@@ -24,10 +24,39 @@ git+https://github.com/Mark930209/GoDSH.git#<40位commit>&path:/plugins/<name>
 | 方式 | 做法 | 适合 |
 |---|---|---|
 | **Git（推荐）** | 上面的 git 规格 | 团队共享、留版本历史 |
+| **npm（已发布）** | 见下方第 2.5 节，`npm i dsh-<name>` 或在 DSH 的 npm 安装页填包名 | 最省事，不用挑 commit |
 | **拷贝目录** | 把 `plugins/<name>/` 打包带走，解压后按绝对路径安装 | 无网络最快 |
-| **npm** | 改正式包名、去 `private`，`npm publish`，目标机按 `包名@版本` | 广泛分发 |
 
 安装前会做 git 连通性探测（5s）。GitHub 不稳可用 Gitee 镜像（同格式）。
+
+## 二·五、npm 安装
+
+三个插件已发布到**公共 npm**，包名与目录名不同（去掉了 `@local/` 作用域）：
+
+| 目录 | npm 包名 |
+|---|---|
+| `plugins/auto-retry` | `dsh-auto-retry` |
+| `plugins/composer-skill-picker` | `dsh-composer-skill-picker` |
+| `plugins/file-tree-context-menu` | `dsh-file-tree-context-menu` |
+
+其他机器：DSH 的 **npm 安装页填包名**（如 `dsh-auto-retry`），或 `npm i dsh-auto-retry`。
+
+发布（维护者，需先登录公共 registry）：
+
+```powershell
+# 本机 .npmrc 指向内网镜像，必须显式指定公共 registry 登录/发布
+npm login --registry=https://registry.npmjs.org/
+cd E:\Projects\DSH_Plugins_Dev\plugins\auto-retry
+npm publish --registry=https://registry.npmjs.org/
+```
+
+注意：
+
+- 包名去掉了 `private`，`files` 只含 `index.js` / `client.js` / `cordis.patch.yml` / `locale` / `icon.svg`
+  （README、LICENSE 由 npm 自动带上），`test/` 不进包。
+- **npm 包的版本和 git tag 各自独立但保持一致**：`npm publish` 用的 `package.json` 版本要等于随后打的
+  `<目录名>-v<版本>` tag，否则市场索引（按 tag 收录）和 npm 会出现版本分叉。
+- 改名后本机必须 `remove_bundle` 旧包名再 `install_bundle`，否则 profile 里的依赖键仍是旧名。
 
 ## 三、发布到市场（聚合索引）
 

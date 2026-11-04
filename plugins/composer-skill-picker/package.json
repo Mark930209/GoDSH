@@ -1,8 +1,7 @@
 {
-  "name": "@local/composer-skill-picker",
-  "version": "1.0.0",
+  "name": "dsh-composer-skill-picker",
+  "version": "1.0.1",
   "description": "Pick a skill of the current project ( .dsh/skills, .agents/skills ) directly from the composer tool row and insert its /name token, instead of scrolling the global slash menu.",
-  "private": true,
   "type": "module",
   "author": "Mark930209 <guimaxingtian@163.com>",
   "license": "MIT",

@@ -1,7 +1,14 @@
 # Changelog
 
 本文件记录所有值得注意的变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
-**版本策略：当前固定 1.0.0，只有用户明确要求发版时才 bump / 打 tag / 建 Release。**
+**版本策略：只有用户明确要求发版时才 bump / 打 tag / 建 Release。**
+
+## [1.0.1] - 2026-11-04
+
+### Changed
+
+- 包名从 `@local/file-tree-context-menu` 改为公开 npm 包名 **`dsh-file-tree-context-menu`**，
+  去掉 `private`，可直接 `npm i dsh-file-tree-context-menu` 或在 DSH 的 npm 安装页填包名。
 
 ## [1.0.0] - 2026-11-03
 

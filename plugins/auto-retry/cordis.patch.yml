@@ -1,6 +1,6 @@
 - insert:
     - id: auto-retry
-      name: '@local/auto-retry'
+      name: 'dsh-auto-retry'
       config:
         enabled: true
         maxRequestRetries: 6
