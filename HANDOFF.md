@@ -115,8 +115,22 @@ GoDSH/
   - 已 `install_bundle` → `application: applied`；`list_bundles` 显示 `installed/enabled: true`，
     `list_plugins` 行 `include:auto-retry` 为 **`fiberPhase: active`**（运行时已加载）。
   - **未发布**：用户 2026-11-03 明确「先安装，先都不发布」→ 未 bump、未打 tag、未建 Release、
-    未刷新市场索引（索引仍只有 file-tree-context-menu 1.0.0）。发版需用户再次明确要求；
-    注意推 tag 会让 CI 重建整个索引，届时 `composer-skill-picker` 也会被一并收录。
+    未刷新市场索引（索引仍只有 file-tree-context-menu 1.0.0）。发版需用户再次明确要求。
+- [x] **发布机制改为「单插件独立发布」**（2026-11-04，用户质疑「为什么发一个必须全都发」）：
+  - 根因：索引是全仓库一份 JSON，原脚本给**每个**插件写同一个 `commit`（默认 HEAD）和同一个
+    时间戳（默认"现在"），于是重生成索引 = 把其他插件指向最新 HEAD、更新时间改成现在，
+    等于把「已提交但未发布」的改动顺带发布。tag / Release 本身一直是分插件的，没问题。
+  - 修法：`make-market-index.mjs` 改为**按 tag 钉版本**——只收录存在 tag
+    `<插件目录名>-v<package.json 版本>` 的插件，`source.commit` 与 `updated` 都取自该 tag
+    指向的提交；未打 tag 的插件默认跳过（`--include-unreleased` 才兜底收录）。
+    实测：连续两次生成字节级一致（幂等）；临时打 `auto-retry-v1.0.0` 后索引只多出 auto-retry，
+    `file-tree-context-menu` 条目一字未变，`composer-skill-picker`（无 tag）不出现。
+  - `release.mjs` 新增 `tag-only` 模式（首次发布 1.0.0 不能走 patch，否则顶成 1.0.1），
+    并修掉 tag-only 时"没有改动也可打 tag"的空提交报错。
+  - `release.yml` 的索引刷新去掉 `--commit`（否则会把未发布插件指向 HEAD），改 `git fetch --tags`。
+  - `docs/publishing.md` 补「索引是一份文件，但发布是各插件独立的」一节与 tag-only 用法。
+  - 顺手把索引里 file-tree 的 `source.commit` 从 `47bbdca`（tag 前提交）纠正为 `3abb8bc`
+    （= `file-tree-context-menu-v1.0.0` 指向的提交），时间戳同步为该提交时间。
 - [x] **`validate-plugins.mjs` 修正**：`client.js` 改为**仅当 `dsh.client` 已声明时**才必需，
   使 Host-only bundle 能通过校验（此前硬性要求 client.js，auto-retry 首次校验即失败）。
 
