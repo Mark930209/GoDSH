@@ -63,8 +63,8 @@ jobs:
 
       - name: Refresh market index
         run: |
-          # The tag commit may be behind main (docs/HANDOFF commits land after a
-          # local release), so refresh the index on top of the latest main instead
+          # The tag commit may be behind main (docs commits land after a local
+          # release), so refresh the index on top of the latest main instead
           # of pushing the detached tag commit over it.
           # make-market-index.mjs 只收录"有发布 tag"的插件，并把每个插件的 commit
           # 钉在它自己的 tag 上，所以这里不需要也不应该传 --commit（否则会把其他

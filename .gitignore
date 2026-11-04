@@ -14,3 +14,10 @@ docs/market-index.local.json
 *.tmp
 .DS_Store
 Thumbs.db
+
+# 本地私有的工作区指令（只给自己用，不随仓库分发）
+AGENTS.md
+
+# 被无关程序误建在仓库里的目录（驱动日志 / 未展开的环境变量）
+/NVIDIA Corporation/
+/%SystemDrive%/

@@ -29,23 +29,32 @@
 
 ## 命名与版本规范
 
-- 插件目录名：`dsh-<功能>`（kebab-case），同时也是建议的 npm 包名。
-- 包 `name` 本地开发可先用 `@local/<目录名>`（`private: true`），发布 npm 前再改正式名。
+- 插件目录名：`dsh-<功能>`（kebab-case），**同时就是 npm 包名**（无作用域，可直接发布）。
+- 历史上用过 `@local/<目录名>` + `private: true` 的本地写法；2026-11-04 起统一改成裸名 `dsh-*`
+  并移除 `private`，`npm publish` 即可上线（改名后本机需 `remove_bundle` 旧名再装）。
 - 版本：每插件独立 semver；`package.json#version` 是唯一事实源。
-- **tag：`<插件目录名>-v<version>`**，例如 `file-tree-context-menu-v1.1.0`。
+- **tag：`<插件目录名>-v<version>`**，例如 `file-tree-context-menu-v1.0.1`。
   （用 `npm version` 默认生成 `v1.1.0`，在 monorepo 里请补一个带前缀的 tag，或直接用 `git tag <name>-v<ver>`。）
 
 ## 索引与安装的对应关系
 
-- 安装单个插件：`git+https://github.com/Mark930209/GoDSH.git#<commit>&path:/plugins/<name>`
+三条安装渠道（详见 [install.md](install.md)）：
+
+| 渠道 | 规格 |
+|---|---|
+| npm | `dsh-<功能>`（或 `dsh-<功能>@<版本>`） |
+| git | `git+https://github.com/Mark930209/GoDSH.git#<commit>&path:/plugins/<name>` |
+| 市场索引 | 添加 `https://mark930209.github.io/GoDSH/market-index.json` |
+
 - 市场索引里每个版本：
   ```json
-  { "version": "1.1.0",
+  { "version": "1.0.1",
     "source": { "type": "git", "url": "https://github.com/Mark930209/GoDSH",
                 "commit": "<40位>", "path": "plugins/file-tree-context-menu" },
     "engines": { "dsh": ">=0.2.1-rc.5" } }
   ```
-- 索引由 `node scripts/make-market-index.mjs` 自动扫描 `plugins/*` 生成。
+- 索引由 `node scripts/make-market-index.mjs` 自动扫描 `plugins/*` 生成，
+  只收录**存在对应 tag** 的插件（按 tag 钉 commit，见 [publishing.md](publishing.md)）。
 
 ## 事故复盘：2026-11-03 误删插件源文件
 

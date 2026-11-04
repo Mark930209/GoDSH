@@ -1,7 +1,6 @@
 {
-  "name": "@local/__PLUGIN__",
+  "name": "__PLUGIN__",
   "version": "0.1.0",
-  "private": true,
   "type": "module",
   "description": "A DeepSeek Harness bundle scaffolded from templates/plugin-bundle.",
   "license": "MIT",

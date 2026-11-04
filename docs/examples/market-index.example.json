@@ -37,7 +37,7 @@
   },
   "plugins": [
     {
-      "name": "@local/file-tree-context-menu",
+      "name": "dsh-file-tree-context-menu",
       "title": {
         "en": "File Tree Context Menu",
         "zh": "文件树右键菜单"

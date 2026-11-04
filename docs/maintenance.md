@@ -26,10 +26,12 @@ git commit -m "feat(<name>): …"
 cd E:\Projects\DSH_Plugins_Dev
 node scripts\release.mjs <name> patch "变更摘要" --dry-run   # 先看版本
 node scripts\release.mjs <name> patch "变更摘要" --push      # 提交+tag+索引+推送
+cd plugins\<name>; npm publish --registry=https://registry.npmjs.org/   # 补发 npm（CI 不管 npm）
 ```
 
 - patch = 修复；minor = 新能力；major = 不兼容（通常是要适配新版 DSH 接口）。
 - tag 自动为 `<name>-v<version>`，推送后 CI 自动建 Release 并刷新索引。
+- **npm 版本必须与 tag 一致**；首次发布用 `tag-only`，详见 [publishing.md](publishing.md)。
 
 手动等价流程（不推荐）：
 

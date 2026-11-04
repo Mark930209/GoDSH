@@ -34,14 +34,14 @@
 # cordis.patch.yml
 - insert:
     - id: <插件id>
-      name: '@local/<插件名>'
+      name: '<包名>'          # 与 package.json 的 name 一致，如 dsh-file-preview
 ```
 
 ## 2. client.js 模块骨架
 
 ```js
 window.__ModuleLoader__.load({
-  id: '@local/<插件名>',            // 模块 id
+  id: '<包名>',                     // 模块 id，与 package.json 的 name 一致
   factory(require) {
     const React = require('react'); // 宿主提供，禁止打包 React/第三方运行时
     const { useState, useEffect } = React;

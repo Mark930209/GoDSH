@@ -3,7 +3,7 @@
  * 从 templates/plugin-bundle 脚手架一个新插件：node scripts/new-plugin.mjs <name>
  *
  * <name> 用 kebab-case，建议 dsh- 前缀（如 dsh-file-preview）。
- * 生成到 plugins/<name>/，包名默认 @local/<name>（private，发布前再改正式名）。
+ * 生成到 plugins/<name>/，**目录名即包名**（包名 = <name>，无作用域、可直接 npm publish）。
  */
 import { cpSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -29,7 +29,7 @@ cpSync(template, target, { recursive: true });
 // 包名
 const pkgPath = join(target, 'package.json');
 const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
-pkg.name = '@local/' + name;
+pkg.name = name;
 pkg.version = '0.1.0';
 const repoConfig = JSON.parse(readFileSync(join(root, 'repo.config.json'), 'utf8'));
 pkg.repository = { type: 'git', url: repoConfig.gitUrl.replace(/\.git$/u, '') + '.git', directory: 'plugins/' + name };

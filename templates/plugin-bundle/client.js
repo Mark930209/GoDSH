@@ -3,7 +3,7 @@
  * 从这里开始改：把 Badge 换成你的 UI，或换注册到别的插槽（见 docs/plugin-dev-guide.md）。
  */
 window.__ModuleLoader__.load({
-  id: '@local/__PLUGIN__',
+  id: '__PLUGIN__',
   factory(require) {
     const React = require('react');
 
