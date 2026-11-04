@@ -37,6 +37,60 @@
   },
   "plugins": [
     {
+      "name": "@local/auto-retry",
+      "title": {
+        "en": "Auto Retry & Resume",
+        "zh": "自动重试与续跑"
+      },
+      "description": {
+        "en": "Retries a failed model request with exponential backoff, then resumes the same session after a delay when a round still fails, until the task completes or a bounded attempt budget is spent.",
+        "zh": "模型服务或某一轮运行失败后，先按指数退避自动重试失败的模型请求；仍然失败则在设定的延时后自动续跑同一会话，直到任务完成或达到次数上限。"
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9IkF1dG8gcmV0cnkgYW5kIHJlc3VtZSI+CiAgPGRlZnM+CiAgICA8bGluZWFyR3JhZGllbnQgaWQ9ImF1dG8tcmV0cnktYmciIHgxPSIwIiB5MT0iMCIgeDI9IjEiIHkyPSIxIj4KICAgICAgPHN0b3Agb2Zmc2V0PSIwIiBzdG9wLWNvbG9yPSIjMEVBNUU5Ii8+CiAgICAgIDxzdG9wIG9mZnNldD0iMSIgc3RvcC1jb2xvcj0iIzdDM0FFRCIvPgogICAgPC9saW5lYXJHcmFkaWVudD4KICA8L2RlZnM+CiAgPHJlY3QgeD0iNCIgeT0iNCIgd2lkdGg9IjU2IiBoZWlnaHQ9IjU2IiByeD0iMTQiIGZpbGw9InVybCgjYXV0by1yZXRyeS1iZykiLz4KICA8cGF0aCBkPSJNNDUgMzJhMTMgMTMgMCAxIDEtMy44LTkuMiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjZmZmIiBzdHJva2Utd2lkdGg9IjQuNSIgc3Ryb2tlLWxpbmVjYXA9InJvdW5kIi8+CiAgPHBhdGggZD0iTTQ1IDE2LjV2OS41aC05LjUiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSI0LjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgogIDxjaXJjbGUgY3g9IjMyIiBjeT0iMzIiIHI9IjMuMiIgZmlsbD0iI2ZmZiIvPgogIDxwYXRoIGQ9Ik0zMiAyNC41VjMybDUuNSAzLjIiIGZpbGw9Im5vbmUiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIzIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+Cg==",
+      "author": "Mark930209 <guimaxingtian@163.com>",
+      "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/auto-retry",
+      "repository": {
+        "url": "https://github.com/Mark930209/GoDSH",
+        "directory": "plugins/auto-retry"
+      },
+      "metadata": {
+        "category": "productivity",
+        "keywords": [
+          "dsh",
+          "deepseek-harness",
+          "plugin",
+          "bundle",
+          "retry",
+          "recovery",
+          "resume",
+          "backoff",
+          "resilience",
+          "llm-failure"
+        ],
+        "labels": [
+          "community"
+        ],
+        "sortKeys": {
+          "updated": 1793762259
+        }
+      },
+      "versions": [
+        {
+          "version": "1.0.0",
+          "publishTimestamp": 1793762259,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Mark930209/GoDSH",
+            "commit": "85c49bd55b9e6bf65fa33ad35b5ed867a4a7b020",
+            "path": "plugins/auto-retry"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5"
+          }
+        }
+      ]
+    },
+    {
       "name": "@local/file-tree-context-menu",
       "title": {
         "en": "File Tree Context Menu",
