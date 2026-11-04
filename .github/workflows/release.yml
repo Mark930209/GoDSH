@@ -66,10 +66,12 @@ jobs:
           # The tag commit may be behind main (docs/HANDOFF commits land after a
           # local release), so refresh the index on top of the latest main instead
           # of pushing the detached tag commit over it.
-          git fetch origin main
+          # make-market-index.mjs 只收录"有发布 tag"的插件，并把每个插件的 commit
+          # 钉在它自己的 tag 上，所以这里不需要也不应该传 --commit（否则会把其他
+          # 未发布插件指向 HEAD）。
+          git fetch origin main --tags
           git checkout -B main origin/main
-          tag_sha="$(git rev-list -n 1 "$GITHUB_REF_NAME")"
-          node scripts/make-market-index.mjs --commit "$tag_sha"
+          node scripts/make-market-index.mjs
           if git diff --quiet -- docs/market-index.json; then
             echo "市场索引无变化"
             exit 0

@@ -39,7 +39,20 @@ node scripts\make-market-index.mjs          # 默认 git-url 取 repo.config.jso
 git add docs/market-index.json && git commit -m "chore: refresh market index" && git push
 ```
 
-- 脚本扫描 `plugins/*`，每个插件一条，git 源自动带 `path: plugins/<name>`。
+### 索引是一份文件，但**发布是各插件独立的**
+
+索引里 `plugins[]` 是全仓库一个数组，所以重新生成必然重写整个文件。为了做到「发 A 不影响 B」，
+`make-market-index.mjs` 采用**按 tag 钉版本**的规则：
+
+| 规则 | 说明 |
+|---|---|
+| 只收录**已发布**插件 | 判定标准：存在 tag `<插件目录名>-v<package.json 里的版本>` |
+| 已发布插件钉死在自己的 tag | `source.commit` = 该 tag 指向的提交，`updated` = 该 tag 的提交时间 |
+| 未打 tag 的插件默认**跳过** | 加 `--include-unreleased` 才会收录（指向 HEAD，不推荐长期用） |
+
+因此：给 `auto-retry` 打 `auto-retry-v1.0.0` 再重生成索引，`file-tree-context-menu` 那条记录**逐字不变**，
+`composer-skill-picker` 若还没有 tag 就完全不出现。同一输入重复运行输出字节一致（幂等），不会产生无意义 diff。
+
 - 索引地址（GitHub Pages）：`https://mark930209.github.io/GoDSH/market-index.json`
 - **GitHub Pages 已启用**（Build and deployment → Source = **GitHub Actions**）。
   `.github/workflows/pages.yml` 会在 `docs/` 变更时自动部署。
@@ -56,8 +69,15 @@ git add docs/market-index.json && git commit -m "chore: refresh market index" &&
 node scripts\release.mjs <plugin> patch "变更摘要" --push
 ```
 
+首次发布（`package.json` 已是 1.0.0、还没有 tag）用 `tag-only`，否则 `patch` 会把 1.0.0 顶成 1.0.1：
+
+```powershell
+node scripts\release.mjs <plugin> tag-only "首个版本" --push
+```
+
 3. 推送 tag `<plugin>-v<ver>` 后，`.github/workflows/release.yml` 会自动：
-   校验插件 → 校验 `package.json` 版本与 tag 一致 → 建 GitHub Release → 用 tag 提交刷新 `docs/market-index.json` 并回推 `main`。
+   校验插件 → 校验 `package.json` 版本与 tag 一致 → 建 GitHub Release →
+   用 tag 提交刷新 `docs/market-index.json` 并回推 `main`（只改本插件那条）。
 
 ## 五、索引硬性规则
 
@@ -68,6 +88,6 @@ git 源必须 40 位小写 commit；`icon` 内嵌 ≤32 KiB；索引 URL 不能�
 
 - [ ] `node scripts/validate-plugins.mjs` 通过
 - [ ] 重启 DSH 冒烟通过
-- [ ] CHANGELOG 更新、版本 bump、tag `<name>-v<ver>` 已打
-- [ ] `docs/market-index.json` 已重生成并提交（release 流程自动做）
+- [ ] CHANGELOG 更新、版本 bump（或首个版本用 `tag-only`）、tag `<name>-v<ver>` 已打
+- [ ] `docs/market-index.json` 已重生成并提交（release 流程自动做，且只改本插件那条）
 - [ ] 另一台机器按 git 规格实装验证一次

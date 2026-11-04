@@ -5,12 +5,14 @@
  *
  * 用法：
  *   node scripts/release.mjs <plugin> <patch|minor|major> "变更摘要" [--push]
+ *   node scripts/release.mjs <plugin> tag-only "变更摘要" [--push]   # 不打 bump，按当前版本打 tag
  *   node scripts/release.mjs <plugin> patch --dry-run
  *
  * 约定：
  *   - 必须在工作区干净时执行（先提交你的改动）。
  *   - CHANGELOG.md 里应先写好对应版本段落（缺少时只警告，不阻断）。
- *   - 索引里的 commit 自动指向 tag 所在提交。
+ *   - 索引里的 commit 自动指向该插件的 tag 指向的提交。
+ *   - 首次发布（package.json 已是 1.0.0、尚无 tag）用 `tag-only`：patch 会顶成 1.0.1。
  */
 import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
@@ -30,8 +32,8 @@ function fail(message) {
 const name = positional[0];
 const bump = positional[1];
 const summary = positional.slice(2).join(' ') || undefined;
-if (!name || !bump) fail('用法: node scripts/release.mjs <plugin> <patch|minor|major> ["变更摘要"] [--push]');
-if (!['patch', 'minor', 'major'].includes(bump)) fail('bump 只接受 patch / minor / major');
+if (!name || !bump) fail('用法: node scripts/release.mjs <plugin> <patch|minor|major|tag-only> ["变更摘要"] [--push]');
+if (!['patch', 'minor', 'major', 'tag-only'].includes(bump)) fail('bump 只接受 patch / minor / major / tag-only');
 const pluginDir = join(root, 'plugins', name);
 if (!existsSync(join(pluginDir, 'package.json'))) fail('找不到插件: plugins/' + name);
 
@@ -46,20 +48,32 @@ const pkgPath = join(pluginDir, 'package.json');
 const before = JSON.parse(readFileSync(pkgPath, 'utf8')).version;
 
 if (dryRun) {
-  console.log('[release] --dry-run：' + name + ' 将从 ' + before + ' 执行 ' + bump + ' 升版本，不做任何修改。');
+  const action = bump === 'tag-only' ? '按当前版本 ' + before + ' 只打 tag（不 bump）'
+    : '将从 ' + before + ' 执行 ' + bump + ' 升版本';
+  console.log('[release] --dry-run：' + name + ' ' + action + '，不做任何修改。');
+  if (bump === 'tag-only' && git(['tag', '--list', name + '-v' + before]) !== '') {
+    fail('tag ' + name + '-v' + before + ' 已存在，tag-only 需要先 bump 版本');
+  }
   process.exit(0);
 }
 
 // 1) 版本 bump（不自动打 tag，由脚本统一打带前缀的 tag）
-// Windows 下 npm 是 .cmd，Node 24 的 execFileSync 直接 spawn 会 EINVAL，统一走 cmd.exe。
-const npmArgs = ['version', bump, '--no-git-tag-version', '--allow-same-version'];
-if (process.platform === 'win32') {
-  execFileSync('cmd.exe', ['/d', '/s', '/c', 'npm ' + npmArgs.join(' ')], { cwd: pluginDir, stdio: 'inherit' });
+if (bump === 'tag-only') {
+  console.log('[release] tag-only：保持版本 ' + before + '，不执行 bump。');
+  if (git(['tag', '--list', name + '-v' + before]) !== '') {
+    fail('tag ' + name + '-v' + before + ' 已存在，tag-only 需要先 bump 版本');
+  }
 } else {
-  execFileSync('npm', npmArgs, { cwd: pluginDir, stdio: 'inherit' });
+  // Windows 下 npm 是 .cmd，Node 24 的 execFileSync 直接 spawn 会 EINVAL，统一走 cmd.exe。
+  const npmArgs = ['version', bump, '--no-git-tag-version', '--allow-same-version'];
+  if (process.platform === 'win32') {
+    execFileSync('cmd.exe', ['/d', '/s', '/c', 'npm ' + npmArgs.join(' ')], { cwd: pluginDir, stdio: 'inherit' });
+  } else {
+    execFileSync('npm', npmArgs, { cwd: pluginDir, stdio: 'inherit' });
+  }
 }
 const version = JSON.parse(readFileSync(pkgPath, 'utf8')).version;
-if (version === before) fail('版本未变化，中止');
+if (bump !== 'tag-only' && version === before) fail('版本未变化，中止');
 
 // 2) CHANGELOG 提醒
 const changelogPath = join(pluginDir, 'CHANGELOG.md');
@@ -67,15 +81,20 @@ if (existsSync(changelogPath) && !readFileSync(changelogPath, 'utf8').includes('
   console.warn('[release] 警告：CHANGELOG.md 里没有 [' + version + '] 段落，记得补。');
 }
 
-// 3) 提交
+// 3) 提交（tag-only 时可能没有改动，避免 git commit 空提交报错）
 git(['add', '-A']);
-git(['commit', '-m', 'chore(' + name + '): release v' + version + (summary ? ' — ' + summary : '')]);
+if (git(['diff', '--cached', '--name-only']) !== '') {
+  git(['commit', '-m', 'chore(' + name + '): release v' + version + (summary ? ' — ' + summary : '')]);
+} else {
+  console.log('[release] 没有需要提交的改动，直接在当前提交上打 tag。');
+}
 
 // 4) 打 tag
 const tag = name + '-v' + version;
 git(['tag', '-a', tag, '-m', tag]);
 
-// 5) 刷新市场索引（--commit 默认 HEAD = tag 提交）
+// 5) 刷新市场索引：脚本按各插件自己的 tag 取 commit，
+//    因此本次只会把本插件指向新 tag，其他已发布插件的条目保持不变。
 execFileSync(process.execPath, [join(root, 'scripts', 'make-market-index.mjs')], { cwd: root, stdio: 'inherit' });
 git(['add', 'docs/market-index.json']);
 const staged = git(['diff', '--cached', '--name-only']);
