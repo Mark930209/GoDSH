@@ -22,10 +22,25 @@
   列表永远为空（显示「当前项目没有技能」）；改为按段（`.agents/skills` / `.dsh/skills`）之前的
   目录前缀与会话 cwd 比较来判定项目归属，用户级 `<home>/.agents/skills` 正确排除。
 
+### Changed（1.0.0 内）
+
+- **改为「短按钮 + 浮层面板」**：工具行只留一个紧凑按钮（`max-width:96px`），面板挂在
+  `shell.overlay`（`position:fixed`，贴按钮上方），宽度 420px、列表区独立滚动，
+  长技能名可横向滚动——解决原生 `<select>` 无法加宽、长名字被截断的问题。
+- **面板加三个复选框**：项目技能（默认勾选）/ 全局技能 / Agent，实时过滤列表并显示各类数量。
+- **新增 Agent 支持**：勾选后列出 `agentPresets/list` 的花名册，点击调
+  `agentPresets.select(sessionId, presetId)`；会话已开始时宿主返回 `agent-preset/locked`，
+  面板显示为禁用行 + 提示「Agent 只能在发送第一条消息前切换」。
+- **修复归类**：没有 `path` 的条目（随包内置的 `office-*`、`diagnose-windows-sandbox-acl` 等）
+  此前被误判为项目技能；现在要求 `path` 必须落在 cwd 或其祖先目录下的
+  `.agents/skills` / `.dsh/skills` 才算项目技能，其余归「全局技能」并标注「内置 / 用户」。
+- 面板背景改用 `--dsw-alias-bg-layer-1`（浅色主题下为纯白）+ `--dsw-alias-border-l2` 边框，
+  不再用偏灰的 `--dsw-alias-bg-overlay`。
+
 ### Notes
 
-- 选择范围刻意**只含项目级来源**：用户级技能与 `customSkillDirs` 会再次变成一长串，
-  需要时改 `client.js` 的 `PROJECT_SOURCES` 集合。
-- 不涉及 agent preset 切换：DSH 的 agent preset 是会话级选择，只能在新建会话时通过
-  hero 区的 preset 控件决定。
-- 早期设计曾用「按钮 + commandUi popupSelect 搜索弹窗」，按用户要求改为常驻下拉框后已移除。
+- Agent 只支持切换 **agent preset**（组合单元）；DSH 不读取 `.github/agents/*.agent.md`
+  这类文件（那是 Copilot 等工具的约定），项目里的自定义 agent 表现为
+  `.agents/skills/<名字>/SKILL.md` 技能。
+- 早期设计曾用「按钮 + commandUi popupSelect 搜索弹窗」与「常驻原生 `<select>`」，
+  均已按用户反馈替换。
