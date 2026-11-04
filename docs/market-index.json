@@ -37,7 +37,7 @@
   },
   "plugins": [
     {
-      "name": "@local/auto-retry",
+      "name": "dsh-auto-retry",
       "title": {
         "en": "Auto Retry & Resume",
         "zh": "自动重试与续跑"
@@ -71,135 +71,18 @@
           "community"
         ],
         "sortKeys": {
-          "updated": 1793762259
+          "updated": 1793763697
         }
       },
       "versions": [
         {
-          "version": "1.0.0",
-          "publishTimestamp": 1793762259,
+          "version": "1.0.1",
+          "publishTimestamp": 1793763697,
           "source": {
             "type": "git",
             "url": "https://github.com/Mark930209/GoDSH",
-            "commit": "85c49bd55b9e6bf65fa33ad35b5ed867a4a7b020",
+            "commit": "fb77d671e53d26f93718aaebb580e5378f880531",
             "path": "plugins/auto-retry"
-          },
-          "engines": {
-            "dsh": ">=0.2.1-rc.5"
-          }
-        }
-      ]
-    },
-    {
-      "name": "@local/composer-skill-picker",
-      "title": {
-        "en": "Project Skill Picker",
-        "zh": "项目技能选择器"
-      },
-      "description": {
-        "en": "Adds a compact button to the composer tool row whose popup panel filters between project and global skills: project skills are discovered from the current project's .agents/skills and .dsh/skills by path, and a pick inserts /name.",
-        "zh": "在输入框工具行常驻一个短按钮，点开浮层面板后用复选框切换「项目技能 / 全局技能」：项目技能按路径自动发现当前项目的 .agents/skills 与 .dsh/skills，选中即插入 /技能名。"
-      },
-      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9IlByb2plY3QgU2tpbGwgUGlja2VyIj4KICA8cmVjdCB4PSI0IiB5PSI0IiB3aWR0aD0iNTYiIGhlaWdodD0iNTYiIHJ4PSIxNCIgZmlsbD0iIzI1NjNFQiIvPgogIDxwYXRoIGQ9Ik0zMC40IDExLjYgMzQuOSAyNC4xIDQ3LjQgMjguNiAzNC45IDMzLjEgMzAuNCA0NS42IDI1LjkgMzMuMSAxMy40IDI4LjYgMjUuOSAyNC4xIDMwLjQgMTEuNloiIGZpbGw9IiNGRkZGRkYiLz4KICA8Y2lyY2xlIGN4PSI0Ny42IiBjeT0iNDcuNiIgcj0iNi4yIiBmaWxsPSIjRkZGRkZGIiBvcGFjaXR5PSIwLjciLz4KPC9zdmc+Cg==",
-      "author": "Mark930209 <guimaxingtian@163.com>",
-      "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/composer-skill-picker",
-      "repository": {
-        "url": "https://github.com/Mark930209/GoDSH",
-        "directory": "plugins/composer-skill-picker"
-      },
-      "metadata": {
-        "category": "productivity",
-        "keywords": [
-          "dsh",
-          "deepseek-harness",
-          "plugin",
-          "bundle",
-          "skill",
-          "composer",
-          "picker",
-          "project",
-          "popup-select"
-        ],
-        "labels": [
-          "community"
-        ],
-        "sortKeys": {
-          "updated": 1793762280
-        }
-      },
-      "versions": [
-        {
-          "version": "1.0.0",
-          "publishTimestamp": 1793762280,
-          "source": {
-            "type": "git",
-            "url": "https://github.com/Mark930209/GoDSH",
-            "commit": "d8be5ced233e17c2f6e24d6781e55c30967ba681",
-            "path": "plugins/composer-skill-picker"
-          },
-          "engines": {
-            "dsh": ">=0.2.1-rc.5"
-          }
-        }
-      ]
-    },
-    {
-      "name": "@local/file-tree-context-menu",
-      "title": {
-        "en": "File Tree Context Menu",
-        "zh": "文件树右键菜单"
-      },
-      "description": {
-        "en": "Right-click files or folders in the workspace file tree and deliverable lists to add them to the conversation, copy paths/links, preview in DSH, open in a terminal, summarize or explain with AI, create/rename/delete entries, or reveal them in the file manager.",
-        "zh": "在工作区文件树与交付物列表中右键文件或文件夹：加入对话、复制路径/链接、在 DSH 中预览、在终端打开、用 AI 总结/解释、新建/重命名/删除，以及在文件管理器中定位。"
-      },
-      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+CiAgPHBhdGggZD0iTTkgMTNhNCA0IDAgMCAxIDQtNGgxMS4yYTQgNCAwIDAgMSAzLjIgMS42TDMwLjYgMTVINTFhNCA0IDAgMCAxIDQgNHY2SDl6IiBmaWxsPSIjMjU2M0VCIi8+CiAgPHJlY3QgeD0iOSIgeT0iMjEiIHdpZHRoPSI0NiIgaGVpZ2h0PSIyNyIgcng9IjQiIGZpbGw9IiMzQjgyRjYiLz4KICA8cmVjdCB4PSIyMyIgeT0iMjUiIHdpZHRoPSIzNSIgaGVpZ2h0PSIyOSIgcng9IjQiIGZpbGw9IiNGRkZGRkYiIHN0cm9rZT0iIzFENEVEOCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgPHJlY3QgeD0iMjgiIHk9IjMwIiB3aWR0aD0iMjUiIGhlaWdodD0iNCIgcng9IjIiIGZpbGw9IiM5M0M1RkQiLz4KICA8cmVjdCB4PSIyOCIgeT0iMzciIHdpZHRoPSIyNSIgaGVpZ2h0PSI0IiByeD0iMiIgZmlsbD0iIzFENEVEOCIvPgogIDxyZWN0IHg9IjI4IiB5PSI0NCIgd2lkdGg9IjE3IiBoZWlnaHQ9IjQiIHJ4PSIyIiBmaWxsPSIjOTNDNUZEIi8+Cjwvc3ZnPgo=",
-      "author": "Mark930209 <guimaxingtian@163.com>",
-      "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/file-tree-context-menu",
-      "repository": {
-        "url": "https://github.com/Mark930209/GoDSH",
-        "directory": "plugins/file-tree-context-menu"
-      },
-      "metadata": {
-        "category": "productivity",
-        "keywords": [
-          "dsh",
-          "deepseek-harness",
-          "plugin",
-          "bundle",
-          "context-menu",
-          "file-tree",
-          "mention",
-          "workspace",
-          "open-in-app",
-          "reveal",
-          "browser",
-          "preview",
-          "terminal",
-          "new-file",
-          "new-folder",
-          "rename",
-          "delete",
-          "recycle-bin",
-          "multi-select",
-          "ai"
-        ],
-        "labels": [
-          "community"
-        ],
-        "sortKeys": {
-          "updated": 1793688206
-        }
-      },
-      "versions": [
-        {
-          "version": "1.0.0",
-          "publishTimestamp": 1793688206,
-          "source": {
-            "type": "git",
-            "url": "https://github.com/Mark930209/GoDSH",
-            "commit": "3abb8bc3a9d7675c5da3da7308b07408a67cd364",
-            "path": "plugins/file-tree-context-menu"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.5"
