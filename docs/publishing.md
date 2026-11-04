@@ -31,13 +31,13 @@ git+https://github.com/Mark930209/GoDSH.git#<40位commit>&path:/plugins/<name>
 
 ## 二·五、npm 安装
 
-三个插件已发布到**公共 npm**，包名与目录名不同（去掉了 `@local/` 作用域）：
+三个插件已发布到**公共 npm**（2026-11-04，`1.0.1`），包名与目录名不同（去掉了 `@local/` 作用域）：
 
-| 目录 | npm 包名 |
-|---|---|
-| `plugins/auto-retry` | `dsh-auto-retry` |
-| `plugins/composer-skill-picker` | `dsh-composer-skill-picker` |
-| `plugins/file-tree-context-menu` | `dsh-file-tree-context-menu` |
+| 目录 | npm 包名 | registry 地址 |
+|---|---|---|
+| `plugins/auto-retry` | `dsh-auto-retry` | <https://www.npmjs.com/package/dsh-auto-retry> |
+| `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | <https://www.npmjs.com/package/dsh-composer-skill-picker> |
+| `plugins/file-tree-context-menu` | `dsh-file-tree-context-menu` | <https://www.npmjs.com/package/dsh-file-tree-context-menu> |
 
 其他机器：DSH 的 **npm 安装页填包名**（如 `dsh-auto-retry`），或 `npm i dsh-auto-retry`。
 
@@ -57,6 +57,24 @@ npm publish --registry=https://registry.npmjs.org/
 - **npm 包的版本和 git tag 各自独立但保持一致**：`npm publish` 用的 `package.json` 版本要等于随后打的
   `<目录名>-v<版本>` tag，否则市场索引（按 tag 收录）和 npm 会出现版本分叉。
 - 改名后本机必须 `remove_bundle` 旧包名再 `install_bundle`，否则 profile 里的依赖键仍是旧名。
+
+### 账号层面的两个坑（已踩过）
+
+1. **写入需要 2FA**。账号开了「Authorization and Writes」时，普通 `npm publish` 会 403：
+   `Two-factor authentication or granular access token with bypass 2fa enabled is required to publish packages.`
+   解决：建一个 **Classic → Automation** token（或 Granular + 勾选 `Bypass two-factor authentication`），
+   写进 `~/.npmrc`：
+   ```powershell
+   npm config set //registry.npmjs.org/:_authToken=npm_xxxx
+   ```
+   注意：**Classic → Publish** 类型的 token 仍要动态码，不能用。
+
+2. **首次发布会生成 `0.0.0-stage` 占位版本**（staged publishing，见
+   <https://docs.npmjs.com/staged-publishing>）。占位版本会出现在包页面的版本列表里，
+   但 `dist-tags.latest` 指向真实版本，安装不受影响。
+   **bypass-2FA 的 token 无权删除它**（`403 ... may not perform this action`，见
+   `npm-gat-bypass2fa-deprecation`），要清理只能在 npmjs.com 用 2FA 手动操作。
+   下次发版前如需干净版本列表，请先在网页端删掉占位版本。
 
 ## 三、发布到市场（聚合索引）
 

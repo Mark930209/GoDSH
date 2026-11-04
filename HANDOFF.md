@@ -23,6 +23,13 @@ GitHub Pages 已启用并部署成功，公开市场索引：`https://mark930209
 模型请求失败按指数退避重试；整轮仍失败则延时自动续跑同一会话，直到任务完成或达到次数上限。
 11 项行为测试通过（`node --test test/auto-retry.test.mjs`）；真实故障冒烟见 §4.3。
 
+**新增（2026-11-04）· 三个插件改名并发布到公共 npm（v1.0.1）**：
+`@local/*` 作用域换成可公开的裸包名 `dsh-auto-retry` / `dsh-composer-skill-picker` /
+`dsh-file-tree-context-menu`，去掉 `private`，`npm publish` 已上线（`latest=1.0.1`），
+本机 profile 依赖键同步从 `@local/*` 换成新名，git tag `*-v1.0.1` 与 Release 均已就绪。
+npm 上与包页并存一个 `0.0.0-stage` 占位版本（staged publishing 产物，bypass-2FA token 删不掉，
+不影响安装）。详见 §5「在其他机器安装」与 `docs/publishing.md` 第二·五节。
+
 ---
 
 ## 1. 环境事实（可直接照抄使用）
@@ -175,6 +182,10 @@ GoDSH/
 4. 计划下一个插件时：`node scripts\new-plugin.mjs <name>` → 开发 → `node scripts\validate-plugins.mjs --plugin <name>`。
 5. 可选：如需把 GitHub 身份设为全局，执行
    `git config --global user.name "Mark930209"` 与 `git config --global user.email "guimaxingtian@163.com"`。
+6. **以后每次发版要手动补 npm**（CI 只管 git tag / Release / 索引，不碰 npm）：
+   `npm publish --registry=https://registry.npmjs.org/`，版本号必须与 `<目录名>-v<版本>` tag 一致。
+   当前 `~/.npmrc` 用的是 automation token（`guimaxingtian` 账号），
+   若 token 过期：重新建 Classic → Automation token 再 `npm config set //registry.npmjs.org/:_authToken=...`。
 
 ## 5. 常用命令
 
@@ -185,12 +196,26 @@ node scripts\validate-plugins.mjs [--plugin <name>] [--since origin/main]
 node scripts\release.mjs <name> patch "变更摘要" [--push]         # 仅用户明确要求时发版
 node scripts\release.mjs <name> tag-only "首个版本" [--push]      # 版本已是 X.Y.Z、只补 tag
 node scripts\make-market-index.mjs                               # 手动刷新索引
+cd plugins\<name>; npm publish --registry=https://registry.npmjs.org/   # 发版后补 npm（需 token）
 # 安装（让 agent 执行）: plugin_manager install_bundle target=<插件绝对路径>
 # 重启 DeepSeek Harness（托盘退出再开）验证
 git push origin HEAD --follow-tags
 ```
 
-### 在其他机器安装（走市场索引）
+### 在其他机器安装（三条路，任选）
+
+**A. npm（最省事，2026-11-04 起可用）**
+
+```text
+dsh-auto-retry                  # 自动重试 / 续跑
+dsh-composer-skill-picker       # 输入框技能下拉
+dsh-file-tree-context-menu      # 文件树右键菜单
+```
+
+DSH 的 npm 安装页直接填包名（或 `包名@1.0.1`），或命令行 `npm i <包名>`。
+包页：<https://www.npmjs.com/package/dsh-auto-retry>（另两个同理）。
+
+**B. 市场索引与 git 规格**
 
 ```text
 1. 启用插件市场 bundle：@deepseek-ai/dsh-experimental-plugin-market-bundle（默认关闭）
@@ -200,11 +225,12 @@ git push origin HEAD --follow-tags
 4. 重启 DSH，确认 Plugins 页对应条目为 active
 ```
 
-也可以跳过市场，直接按 git 规格装单个插件（`<commit>` 用索引里该插件的值）：
+跳过市场、直接按 git 规格装单个插件（1.0.1 的 commit）：
 
 ```powershell
-# 例：auto-retry 1.0.0
-git+https://github.com/Mark930209/GoDSH.git#85c49bd55b9e6bf65fa33ad35b5ed867a4a7b020&path:/plugins/auto-retry
+git+https://github.com/Mark930209/GoDSH.git#fb77d671e53d26f93718aaebb580e5378f880531&path:/plugins/auto-retry
+git+https://github.com/Mark930209/GoDSH.git#e30c3b2a7f6ee07747ec0ff7af920c1e7b91526b&path:/plugins/composer-skill-picker
+git+https://github.com/Mark930209/GoDSH.git#2d3e8e10f9542087abe8777c5b397e36828d5800&path:/plugins/file-tree-context-menu
 ```
 
 其他机器要跑 `auto-retry` 的**可见重试提示**，宿主版本需含 `client-ui-chat` 的 `RetryNodeView`
