@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "Project Skill Picker",
-    "description": "Adds a compact button to the composer tool row whose popup panel filters between project skills, global skills, and agents: project skills are discovered from the current project's .agents/skills and .dsh/skills by path, agents list switchable agent presets, and a pick inserts /name or switches the preset."
+    "description": "Adds a compact button to the composer tool row whose popup panel filters between project and global skills: project skills are discovered from the current project's .agents/skills and .dsh/skills by path, and a pick inserts /name."
   }
 }

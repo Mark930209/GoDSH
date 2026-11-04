@@ -1,18 +1,15 @@
 /**
  * 项目技能选择器（composer-skill-picker）
  *
- * 在输入框工具行常驻一个短按钮，点开是一个浮层面板，用 3 个复选框控制列表：
+ * 在输入框工具行常驻一个短按钮，点开是一个浮层面板，用 2 个复选框控制列表：
  *   - 项目技能：`<项目根>/.agents/skills` 或 `<项目根>/.dsh/skills` 下的 SKILL.md
  *   - 全局技能：用户级（`<agentsHome>/skills`、`<dshHome>/skills`）与随包内置（bundled）
- *   - Agent：DSH 的 agent preset（YAML 声明的插件组合）
  *
  * 项目根 = 最近的含 `.git` 的祖先目录（没有则用会话 cwd），由 DSH 的 skill provider
  * 判定；这里只做路径归属判断，因为 `skills/list` 的结果条目**没有 source 字段**
  * （只有 path / name / description / whenToUse / modelInvocable）。
  *
- * 选技能 → 把 `/技能名 ` 插入草稿（与内置 ui-skill 的 onPick 一致），发送时由宿主解析。
- * 选 Agent → 调 `agentPresets/select`；只在空白会话（还没发第一条消息）能切换，
- * 否则宿主返回 `agent-preset/locked`。
+ * 选中即把 `/技能名 ` 插入草稿（与内置 ui-skill 的 onPick 一致），发送时由宿主解析。
  */
 window.__ModuleLoader__.load({
   id: '@local/composer-skill-picker',
@@ -34,46 +31,30 @@ window.__ModuleLoader__.load({
     /** 简体中文（key 集合的事实来源）。 */
     const zh = {
       'label': '技能',
-      'title': '选择技能或 Agent',
+      'title': '选择技能（项目 / 全局）',
       'project': '项目技能',
       'global': '全局技能',
-      'agent': 'Agent',
       'loading': '加载中…',
       'error': '加载失败',
       'emptyProject': '当前项目没有技能',
       'emptyGlobal': '没有全局技能',
-      'emptyAgent': '没有可用的 Agent',
       'emptyPick': '至少勾选一类',
       'builtin': '内置',
-      'user': '用户',
-      'agentDefault': '默认',
-      'agentBroken': '不可用',
-      'agentLocked': '会话已开始：Agent 只能在发送第一条消息前切换',
-      'agentApplied': '已切换 Agent',
-      'agentFailed': '切换 Agent 失败',
-      'agentUnavailable': 'Agent 列表不可用'
+      'user': '用户'
     };
     /** English mirror. */
     const en = {
       'label': 'Skills',
-      'title': 'Pick a skill or agent',
+      'title': 'Pick a skill (project / global)',
       'project': 'Project',
       'global': 'Global',
-      'agent': 'Agent',
       'loading': 'Loading…',
       'error': 'Load failed',
       'emptyProject': 'No skills in this project',
       'emptyGlobal': 'No global skills',
-      'emptyAgent': 'No agent available',
       'emptyPick': 'Select at least one group',
       'builtin': 'Built-in',
-      'user': 'User',
-      'agentDefault': 'default',
-      'agentBroken': 'broken',
-      'agentLocked': 'Session started: an agent can only be switched before the first message',
-      'agentApplied': 'Agent switched',
-      'agentFailed': 'Could not switch agent',
-      'agentUnavailable': 'Agent roster unavailable'
+      'user': 'User'
     };
 
     // ---------------------------------------------------------------- styles
@@ -97,15 +78,12 @@ window.__ModuleLoader__.load({
       'color:var(--dsw-alias-label-secondary);user-select:none;}',
       '.cskp-check input{accent-color:var(--dsw-alias-brand-primary);margin:0;cursor:pointer;}',
       '.cskp-count{color:var(--dsw-alias-state-idle-primary);font-size:11px;}',
-      '.cskp-hint{padding:5px 10px;font-size:11px;flex:none;color:var(--dsw-alias-state-warn-primary);',
-      'border-bottom:1px solid var(--dsw-alias-border-l1);}',
       '.cskp-list{overflow-y:auto;overscroll-behavior:contain;padding:4px;flex:1 1 auto;min-height:0;}',
       '.cskp-group{font-size:11px;font-weight:600;padding:6px 8px 2px;',
       'color:var(--dsw-alias-label-secondary);}',
       '.cskp-row{display:flex;flex-direction:column;gap:1px;width:100%;padding:5px 8px;border:none;',
       'border-radius:var(--dsw-radius-sm);background:transparent;text-align:left;cursor:pointer;font:inherit;}',
-      '.cskp-row:hover:not(:disabled){background:var(--dsw-alias-interactive-bg-hover-solid);}',
-      '.cskp-row:disabled{opacity:.5;cursor:default;}',
+      '.cskp-row:hover{background:var(--dsw-alias-interactive-bg-hover-solid);}',
       '.cskp-row:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px;}',
       '.cskp-line{display:flex;align-items:center;gap:6px;min-width:0;}',
       '.cskp-name{flex:0 1 auto;min-width:0;font-size:12px;color:var(--dsw-alias-label-primary);',
@@ -115,12 +93,7 @@ window.__ModuleLoader__.load({
       'overflow:hidden;text-overflow:ellipsis;}',
       '.cskp-badge{flex:none;font-size:10px;line-height:14px;padding:0 4px;border-radius:4px;',
       'background:var(--dsw-alias-bg-module-platform);color:var(--dsw-alias-label-secondary);}',
-      '.cskp-badge[data-tone="error"]{color:var(--dsw-alias-state-error-primary);}',
-      '.cskp-empty{padding:10px;font-size:12px;color:var(--dsw-alias-label-secondary);}',
-      '.cskp-notice{padding:6px 10px;font-size:11px;flex:none;',
-      'border-top:1px solid var(--dsw-alias-border-l1);color:var(--dsw-alias-label-secondary);}',
-      '.cskp-notice[data-kind="error"]{color:var(--dsw-alias-state-error-primary);}',
-      '.cskp-notice[data-kind="success"]{color:var(--dsw-alias-state-success-primary);}'
+      '.cskp-empty{padding:10px;font-size:12px;color:var(--dsw-alias-label-secondary);}'
     ].join('');
 
     /**
@@ -169,20 +142,14 @@ window.__ModuleLoader__.load({
       const state = {
         open: false,
         sessionId: undefined,
-        sessionBlank: true,
         rect: null,
         anchorEl: null,
         panelEl: null,
-        filters: { project: true, global: false, agent: false },
+        filters: { project: true, global: false },
         catalog: [],
         cwd: undefined,
         skillsStatus: 'idle',
         skillsError: null,
-        presets: [],
-        presetsStatus: 'idle',
-        presetsError: null,
-        agentBusy: undefined,
-        notice: null,
         insertSkill: null
       };
       const listeners = new Set();
@@ -210,7 +177,7 @@ window.__ModuleLoader__.load({
         setState({ open: false, panelEl: null, anchorEl: null });
       }
 
-      /** 会话摘要（含 cwd / blank）。 */
+      /** 会话摘要（含 cwd）。 */
       function sessionSummary(sessionId) {
         try {
           return sessions.list?.getSnapshot?.()?.byId?.[sessionId];
@@ -295,77 +262,6 @@ window.__ModuleLoader__.load({
         }
       }
 
-      /** Agent preset 远端命名空间（可能不存在）。 */
-      function presetRemote() {
-        try {
-          return ctx.remote?.agentPresets;
-        } catch {
-          return undefined;
-        }
-      }
-
-      /** 加载 agent preset 花名册。 */
-      async function loadPresets() {
-        const remote = presetRemote();
-        if (remote === undefined || typeof remote.list !== 'function') {
-          setState({ presetsStatus: 'unavailable', presets: [] });
-          return;
-        }
-        setState({ presetsStatus: 'loading', presetsError: null });
-        try {
-          const result = await remote.list();
-          const value = result && result.ok === true ? result.value : result;
-          if (result && result.ok === false) {
-            const code = result.error && result.error.code;
-            if (code === 'gateway/invocation-unavailable') {
-              setState({ presetsStatus: 'unavailable', presets: [] });
-              return;
-            }
-            throw new Error(result.error?.message ?? code ?? 'agentPresets/list failed');
-          }
-          const presets = Array.isArray(value?.presets) ? value.presets.slice() : [];
-          presets.sort(byName);
-          setState({ presets, presetsStatus: 'ready' });
-        } catch (error) {
-          setState({
-            presetsStatus: 'error',
-            presetsError: String((error && error.message) || error)
-          });
-        }
-      }
-
-      /** 切换 Agent preset（仅空白会话可成功）。 */
-      async function pickAgent(presetId) {
-        const remote = presetRemote();
-        if (remote === undefined || typeof remote.select !== 'function') {
-          setState({ notice: { kind: 'error', text: t('agentUnavailable') } });
-          return;
-        }
-        setState({ notice: null, agentBusy: presetId });
-        try {
-          const result = await remote.select(state.sessionId, presetId);
-          if (result && result.ok === true) {
-            const preset = state.presets.find((item) => item.id === presetId);
-            setState({
-              agentBusy: undefined,
-              notice: { kind: 'success', text: `${t('agentApplied')}: ${preset?.name ?? presetId}` }
-            });
-            await loadPresets();
-            return;
-          }
-          const code = result?.error?.code;
-          const text = code === 'agent-preset/locked'
-            ? t('agentLocked')
-            : String(result?.error?.message ?? code ?? t('agentFailed'));
-          setState({ agentBusy: undefined, notice: { kind: 'error', text } });
-        } catch (error) {
-          setState({
-            agentBusy: undefined,
-            notice: { kind: 'error', text: String((error && error.message) || error) }
-          });
-        }
-      }
-
       /** 把 `/名字 ` 插入草稿并交还输入焦点。 */
       function insertSkill(name) {
         const actions = state.insertSkill;
@@ -410,8 +306,7 @@ window.__ModuleLoader__.load({
             checked: state.filters[key] === true,
             onChange: () => {
               const filters = Object.assign({}, state.filters, { [key]: state.filters[key] !== true });
-              setState({ filters, notice: null });
-              if (key === 'agent' && filters.agent && state.presetsStatus === 'idle') loadPresets();
+              setState({ filters });
             }
           }),
           h('span', null, label),
@@ -437,31 +332,6 @@ window.__ModuleLoader__.load({
           ]),
           skill.description !== undefined && skill.description !== ''
             ? h('span', { key: 'meta', className: 'cskp-meta' }, skill.description)
-            : null
-        ]);
-      }
-
-      /** Agent preset 行。 */
-      function agentRow(preset) {
-        const broken = typeof preset.broken === 'string' && preset.broken !== '';
-        const locked = state.sessionBlank === false;
-        return h('button', {
-          key: `a:${preset.id}`,
-          type: 'button',
-          className: 'cskp-row',
-          disabled: broken || locked || state.agentBusy === preset.id || state.presetsStatus !== 'ready',
-          title: broken ? preset.broken : (preset.description ?? preset.id),
-          onClick: () => pickAgent(preset.id)
-        }, [
-          h('span', { key: 'line', className: 'cskp-line' }, [
-            h('span', { key: 'name', className: 'cskp-name' }, preset.name ?? preset.id),
-            preset.isDefault === true
-              ? h('span', { key: 'default', className: 'cskp-badge' }, t('agentDefault'))
-              : null,
-            broken ? h('span', { key: 'broken', className: 'cskp-badge', 'data-tone': 'error' }, t('agentBroken')) : null
-          ]),
-          preset.description !== undefined && preset.description !== ''
-            ? h('span', { key: 'meta', className: 'cskp-meta' }, preset.description)
             : null
         ]);
       }
@@ -508,7 +378,7 @@ window.__ModuleLoader__.load({
         const filters = state.filters;
 
         const body = [];
-        if (!filters.project && !filters.global && !filters.agent) {
+        if (!filters.project && !filters.global) {
           body.push(h('div', { key: 'pick', className: 'cskp-empty' }, t('emptyPick')));
         }
         if (filters.project) {
@@ -535,39 +405,6 @@ window.__ModuleLoader__.load({
             body.push(...global.map((skill) => skillRow(skill, true)));
           }
         }
-        if (filters.agent) {
-          body.push(h('div', { key: 'a:title', className: 'cskp-group' }, t('agent')));
-          if (state.presetsStatus === 'loading' || state.presetsStatus === 'idle') {
-            body.push(h('div', { key: 'a:loading', className: 'cskp-empty' }, t('loading')));
-          } else if (state.presetsStatus === 'unavailable') {
-            body.push(h('div', { key: 'a:unavailable', className: 'cskp-empty' }, t('agentUnavailable')));
-          } else if (state.presetsStatus === 'error') {
-            body.push(h('div', { key: 'a:error', className: 'cskp-empty' }, `${t('error')}: ${state.presetsError ?? ''}`));
-          } else if (state.presets.length === 0) {
-            body.push(h('div', { key: 'a:empty', className: 'cskp-empty' }, t('emptyAgent')));
-          } else {
-            body.push(...state.presets.map((preset) => agentRow(preset)));
-          }
-        }
-
-        const children = [
-          h('div', { key: 'filters', className: 'cskp-filters' }, [
-            filterCheck('project', t('project'), project.length),
-            filterCheck('global', t('global'), global.length),
-            filterCheck('agent', t('agent'), state.presets.length)
-          ])
-        ];
-        if (filters.agent && state.sessionBlank === false) {
-          children.push(h('div', { key: 'hint', className: 'cskp-hint' }, t('agentLocked')));
-        }
-        children.push(h('div', { key: 'list', className: 'cskp-list' }, body));
-        if (state.notice !== null) {
-          children.push(h('div', {
-            key: 'notice',
-            className: 'cskp-notice',
-            'data-kind': state.notice.kind
-          }, state.notice.text));
-        }
 
         return h('div', {
           className: 'cskp-panel',
@@ -575,7 +412,13 @@ window.__ModuleLoader__.load({
           ref: (element) => {
             state.panelEl = element;
           }
-        }, children);
+        }, [
+          h('div', { key: 'filters', className: 'cskp-filters' }, [
+            filterCheck('project', t('project'), project.length),
+            filterCheck('global', t('global'), global.length)
+          ]),
+          h('div', { key: 'list', className: 'cskp-list' }, body)
+        ]);
       }
 
       /** 工具行里的短按钮。 */
@@ -598,11 +441,9 @@ window.__ModuleLoader__.load({
           close();
           setState({
             sessionId,
-            sessionBlank: sessionSummary(sessionId)?.blank !== false,
             catalog: [],
             cwd: undefined,
-            skillsStatus: 'idle',
-            notice: null
+            skillsStatus: 'idle'
           });
           loadSkills(sessionId);
         }, [sessionId]);
@@ -617,12 +458,9 @@ window.__ModuleLoader__.load({
             open: true,
             rect: { left: rect.left, top: rect.top },
             anchorEl: event.currentTarget,
-            sessionId,
-            sessionBlank: sessionSummary(sessionId)?.blank !== false,
-            notice: null
+            sessionId
           });
           if (state.skillsStatus === 'idle' || state.skillsStatus === 'error') loadSkills(sessionId);
-          if (state.filters.agent) loadPresets();
         };
 
         return h('button', {

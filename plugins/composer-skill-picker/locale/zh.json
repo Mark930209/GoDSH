@@ -1,6 +1,6 @@
 {
   "meta": {
     "title": "项目技能选择器",
-    "description": "在输入框工具行常驻一个短按钮，点开浮层面板后用复选框切换「项目技能 / 全局技能 / Agent」：项目技能按路径自动发现当前项目的 .agents/skills 与 .dsh/skills，Agent 列出可切换的 agent preset，选中即插入 /技能名 或切换预设。"
+    "description": "在输入框工具行常驻一个短按钮，点开浮层面板后用复选框切换「项目技能 / 全局技能」：项目技能按路径自动发现当前项目的 .agents/skills 与 .dsh/skills，选中即插入 /技能名。"
   }
 }
