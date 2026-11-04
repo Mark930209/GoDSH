@@ -89,6 +89,59 @@
           }
         }
       ]
+    },
+    {
+      "name": "dsh-composer-skill-picker",
+      "title": {
+        "en": "Project Skill Picker",
+        "zh": "项目技能选择器"
+      },
+      "description": {
+        "en": "Adds a compact button to the composer tool row whose popup panel filters between project and global skills: project skills are discovered from the current project's .agents/skills and .dsh/skills by path, and a pick inserts /name.",
+        "zh": "在输入框工具行常驻一个短按钮，点开浮层面板后用复选框切换「项目技能 / 全局技能」：项目技能按路径自动发现当前项目的 .agents/skills 与 .dsh/skills，选中即插入 /技能名。"
+      },
+      "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCIgd2lkdGg9IjY0IiBoZWlnaHQ9IjY0IiByb2xlPSJpbWciIGFyaWEtbGFiZWw9IlByb2plY3QgU2tpbGwgUGlja2VyIj4KICA8cmVjdCB4PSI0IiB5PSI0IiB3aWR0aD0iNTYiIGhlaWdodD0iNTYiIHJ4PSIxNCIgZmlsbD0iIzI1NjNFQiIvPgogIDxwYXRoIGQ9Ik0zMC40IDExLjYgMzQuOSAyNC4xIDQ3LjQgMjguNiAzNC45IDMzLjEgMzAuNCA0NS42IDI1LjkgMzMuMSAxMy40IDI4LjYgMjUuOSAyNC4xIDMwLjQgMTEuNloiIGZpbGw9IiNGRkZGRkYiLz4KICA8Y2lyY2xlIGN4PSI0Ny42IiBjeT0iNDcuNiIgcj0iNi4yIiBmaWxsPSIjRkZGRkZGIiBvcGFjaXR5PSIwLjciLz4KPC9zdmc+Cg==",
+      "author": "Mark930209 <guimaxingtian@163.com>",
+      "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/composer-skill-picker",
+      "repository": {
+        "url": "https://github.com/Mark930209/GoDSH",
+        "directory": "plugins/composer-skill-picker"
+      },
+      "metadata": {
+        "category": "productivity",
+        "keywords": [
+          "dsh",
+          "deepseek-harness",
+          "plugin",
+          "bundle",
+          "skill",
+          "composer",
+          "picker",
+          "project",
+          "popup-select"
+        ],
+        "labels": [
+          "community"
+        ],
+        "sortKeys": {
+          "updated": 1793763723
+        }
+      },
+      "versions": [
+        {
+          "version": "1.0.1",
+          "publishTimestamp": 1793763723,
+          "source": {
+            "type": "git",
+            "url": "https://github.com/Mark930209/GoDSH",
+            "commit": "e30c3b2a7f6ee07747ec0ff7af920c1e7b91526b",
+            "path": "plugins/composer-skill-picker"
+          },
+          "engines": {
+            "dsh": ">=0.2.1-rc.5"
+          }
+        }
+      ]
     }
   ]
 }
