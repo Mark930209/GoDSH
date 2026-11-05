@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderToolCatalog, stableStringify, extractToolCall, extractInvokeCall, createInboundTransform } from '../index.js';
+import { renderToolCatalog, stableStringify, extractToolCall, extractInvokeCall, createInboundTransform, resolveOptions, routeAllowed } from '../index.js';
 
 const TOOLS = [
   {
@@ -274,4 +274,42 @@ test('two XML invoke blocks in one message both parse', async () => {
   ]);
   assert.equal(toolBlocks.length, 2);
   assert.equal(text, '');
+});
+
+// --- The provider gate: this bundle must never touch a non-n1n route.
+
+test('the default config allows only n1n', () => {
+  const options = resolveOptions({});
+  assert.deepEqual(options.providers, ['n1n']);
+  assert.equal(routeAllowed(options, 'n1n', 'deepseek-v4.1-flash'), true);
+  for (const provider of ['strata', 'deepseek', 'openai', 'N1N', '', undefined, null]) {
+    assert.equal(routeAllowed(options, provider, 'deepseek-v4.1-flash'), false, `provider ${String(provider)} must be refused`);
+  }
+});
+
+test('an empty providers list disables the plugin instead of allowing everything', () => {
+  const options = resolveOptions({ providers: [] });
+  assert.deepEqual(options.providers, []);
+  assert.equal(routeAllowed(options, 'n1n', 'deepseek-v4.1-flash'), false);
+  assert.equal(routeAllowed(options, 'strata', 'qwen3.8-flash-next-iq3_s'), false);
+});
+
+test('a stale config cannot widen the plugin onto another vendor', () => {
+  const options = resolveOptions({ providers: ['n1n', 'strata', 'deepseek'] });
+  assert.deepEqual(options.providers, ['n1n'], 'only n1n may survive config resolution');
+  assert.equal(routeAllowed(options, 'strata', 'qwen3.8-flash-next-iq3_s'), false);
+  assert.equal(routeAllowed(options, 'deepseek', 'deepseek-chat'), false);
+});
+
+test('a models list narrows inside n1n and refuses other n1n models', () => {
+  const options = resolveOptions({ models: ['deepseek-v4.1-flash'] });
+  assert.equal(routeAllowed(options, 'n1n', 'deepseek-v4.1-flash'), true);
+  assert.equal(routeAllowed(options, 'n1n', 'glm-5.3'), false);
+  assert.equal(routeAllowed(options, 'strata', 'deepseek-v4.1-flash'), false);
+});
+
+test('an unidentified route keeps native tool calling', () => {
+  const options = resolveOptions({});
+  assert.equal(routeAllowed(options, undefined, undefined), false);
+  assert.equal(routeAllowed(options, 'n1n', undefined), true, 'n1n with no model narrowing still applies');
 });

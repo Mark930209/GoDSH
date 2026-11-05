@@ -22,9 +22,9 @@
  *      fences) and re-emitted as harness `tool-call` blocks, so the rest of the
  *      loop — execution, result回填, UI — is unchanged.
  *
- * Both halves are gated by `providers` (empty = every provider), because a
- * provider that caches the `tools` field correctly is better off with the
- * native protocol.
+ * Both halves are gated on the exact n1n route. There is no "enable for every
+ * provider" switch: a provider that caches the `tools` field correctly, or a
+ * model that ignores the text protocol, must keep native tool calling.
  */
 import { randomUUID } from 'node:crypto';
 
@@ -46,30 +46,50 @@ const INVOKE_OPEN = /^<([^<>\s]+)\s+invoke\s+name\s*=\s*"([^"]*)"\s*>/;
 /** Any single tag, used to find the earliest opener inside prose. */
 const ANY_TAG = /<[^<>]{1,120}>/g;
 
+/** The only provider this bundle may ever rewrite. */
+export const N1N_PROVIDER = 'n1n';
+
 /**
  * Resolve the effective options from the patch row's raw `config`.
  *
- * Validation is intentionally local and total: a malformed row falls back to
- * the documented defaults instead of preventing the plugin from loading.
+ * Fail-closed by design: the provider allow-list defaults to `['n1n']`, and an
+ * empty list means **nothing is allowed** — there is deliberately no "empty
+ * means every provider" escape hatch, because rewriting another provider's
+ * request would silently break its native tool calling.
+ *
+ * A malformed row falls back to the documented defaults instead of preventing
+ * the plugin from loading.
  */
-function resolveOptions(config) {
+export function resolveOptions(config) {
   const raw = config !== null && typeof config === 'object' && !Array.isArray(config) ? config : {};
   const bool = (key, fallback) => (typeof raw[key] === 'boolean' ? raw[key] : fallback);
   const text = (key, fallback) => (typeof raw[key] === 'string' && raw[key].length > 0 ? raw[key] : fallback);
-  const providers = Array.isArray(raw.providers)
-    ? raw.providers.filter((value) => typeof value === 'string' && value.length > 0)
-    : [];
+  const list = (key, fallback) => {
+    if (!Array.isArray(raw[key])) return fallback;
+    return raw[key].filter((value) => typeof value === 'string' && value.length > 0);
+  };
   return {
     enabled: bool('enabled', true),
-    providers,
+    // Anything other than n1n is dropped here, so a stale config row cannot
+    // widen the plugin onto another vendor.
+    providers: list('providers', [N1N_PROVIDER]).filter((value) => value === N1N_PROVIDER),
+    // Optional narrowing inside n1n; empty means every n1n model.
+    models: list('models', []),
     marker: text('marker', '@@TOOL@@')
   };
 }
 
-/** Whether one resolved provider id may use the text protocol. */
-function providerAllowed(options, provider) {
-  if (options.providers.length === 0) return true;
-  return typeof provider === 'string' && options.providers.includes(provider);
+/**
+ * Whether this exact provider/model pair may use the text protocol.
+ *
+ * Both halves fail closed: an unknown provider id (or a missing one) is never
+ * allowed, so a route the harness cannot identify keeps native tool calling.
+ */
+export function routeAllowed(options, provider, model) {
+  if (typeof provider !== 'string' || provider !== N1N_PROVIDER) return false;
+  if (!options.providers.includes(provider)) return false;
+  if (options.models.length === 0) return true;
+  return typeof model === 'string' && options.models.includes(model);
 }
 
 /** Recursively sort object keys so the rendered text is byte-identical every step. */
@@ -565,8 +585,12 @@ export function apply(ctx, config) {
     const disposeAssemble = ctx.on('system-prompt/assemble', async (assembly, context, next) => {
       const assembled = await next();
       if (assembled === null || typeof assembled !== 'object') return assembled;
-      const provider = assembled.variables?.provider ?? context?.agent?.options?.provider ?? '';
-      if (!providerAllowed(options, provider)) return assembled;
+      // `installModelSelection` publishes the selected route as prompt
+      // variables; the agent options are only a fallback. An unidentified
+      // route stays native.
+      const provider = assembled.variables?.provider ?? context?.agent?.options?.provider;
+      const model = assembled.variables?.model ?? context?.agent?.options?.model;
+      if (!routeAllowed(options, provider, model)) return assembled;
       const tools = Array.isArray(assembled.tools) ? assembled.tools : [];
       if (tools.length === 0) return assembled;
 
@@ -585,12 +609,14 @@ export function apply(ctx, config) {
     });
 
     const disposeStream = ctx.on('llm/stream', (request, next) => {
-      if (!providerAllowed(options, request?.provider ?? '')) return next();
+      // The request carries the frozen route, so this is the authoritative gate.
+      if (!routeAllowed(options, request?.provider, request?.model)) return next();
       if (Array.isArray(request?.tools) && request.tools.length > 0) return next();
       return createInboundTransform(next(), { marker: options.marker });
     });
 
-    note('info', `active for providers: ${options.providers.length === 0 ? 'all' : options.providers.join(', ')}`);
+    const scope = `${options.providers.join(', ') || 'none'}${options.models.length > 0 ? ` / models: ${options.models.join(', ')}` : ''}`;
+    note('info', `active for: ${scope}`);
 
     return () => {
       disposeAssemble();

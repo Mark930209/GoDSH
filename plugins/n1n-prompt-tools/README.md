@@ -29,6 +29,19 @@ Host 插件，挂两个水位（waterfall）事件，不需要任何 `@deepseek-
      `name` 同级）后，改发标准 `block-start` / `tool-call-delta` / `block-end` 工具调用块，
      其余循环（执行、结果回填、UI 渲染）完全不变。
 
+## 供应商硬限制（不可绕过）
+
+这个插件**只会作用于 `provider === 'n1n'` 的路由**，代码里做了三重兜底：
+
+1. `resolveOptions()` 把 `providers` 过滤成**只保留 `'n1n'`**——即使有人把配置写成
+   `providers: ['n1n', 'strata', 'deepseek']`，其它 provider 也会在解析阶段被丢弃。
+2. `routeAllowed()` 要求 provider 必须是**非空字符串且严格等于 `'n1n'`**，
+   否则直接放行原生工具调用。`undefined` / 空串 / 大小写不一致（`N1N`）一律拒绝。
+3. 两个水位各自独立校验：出站看 `assembled.variables.provider`（`installModelSelection`
+   写入），入站看请求体里冻结的 `request.provider`。任意一侧认不出路由，就走原生 `tools`。
+
+**不存在"空数组 = 全部生效"的开关**：`providers: []` 只会让插件什么都不做。
+
 ## 配置
 
 `cordis.patch.yml` 的 `config`：
@@ -36,8 +49,28 @@ Host 插件，挂两个水位（waterfall）事件，不需要任何 `@deepseek-
 | 键 | 默认 | 说明 |
 |---|---|---|
 | `enabled` | `true` | 总开关 |
-| `providers` | `['n1n']` | 生效的 provider id 列表；**空数组 = 全部 provider**。默认只作用于 n1n 网关 |
+| `providers` | `['n1n']` | 只会保留 `'n1n'`；写其它值会被丢弃。空数组 = 完全不生效 |
+| `models` | `[]` | 可选，按模型收窄；空数组 = n1n 下所有模型 |
 | `marker` | `'@@TOOL@@'` | 文本调用标记 |
+
+### n1n 内部的模型差异
+
+n1n 网关下挂了多个模型，`models: []`（默认）表示全部适用，但**并非所有 n1n 模型都遵循文本协议**：
+
+| 模型 | 文本协议实测 |
+|---|---|
+| `deepseek-v4.1-flash` | 可用（`@@TOOL@@` 与 XML invoke 都出现过，均已支持） |
+| `kimi-k3.1-pro` | 可用 |
+| `glm-5.3` | **不可用**，会回"我没有 read 工具"直接放弃 |
+
+如果要用 `glm-5.3` 或其它未验证模型，请显式收窄，避免工具调用静默失效：
+
+```yaml
+config:
+  enabled: true
+  providers: ['n1n']
+  models: ['deepseek-v4.1-flash', 'kimi-k3.1-pro']
+```
 
 ## 安装（本机开发）
 
@@ -52,9 +85,10 @@ node --check index.js
 node --test test/n1n-prompt-tools.test.mjs
 ```
 
-22 项单元测试覆盖：确定性渲染、marker 跨 chunk、JSON 跨 chunk、字符串内花括号与转义、
+27 项单元测试覆盖：确定性渲染、marker 跨 chunk、JSON 跨 chunk、字符串内花括号与转义、
 代码围栏、多个调用、reasoning 透传、空文本块丢弃、扁平参数容错、XML invoke 块（含跨 chunk、
-多调用、代码围栏、未闭合回落）、未完成调用回落文本等。
+多调用、代码围栏、未闭合回落）、未完成调用回落文本，以及**供应商硬限制**（默认只允许 n1n、
+空数组不生效、混合列表被过滤、`models` 收窄、未知路由拒绝）。
 
 ## 协议一致性（实测，2026-11-05）
 
