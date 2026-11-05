@@ -3,6 +3,30 @@
 本文件记录所有值得注意的变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 **版本策略：只有用户明确要求发版时才 bump / 打 tag / 建 Release。**
 
+## [Unreleased]
+
+### Fixed
+
+- **写坏会话日志导致整份 session 无法加载（严重）**：`agent/request-error` 里重试预算用尽时
+  会 `perSession.delete(key)` 清掉计数，但可见重试链的 `retryId` 保留不动，于是同一个
+  `turn:step` 下的 `llm/retry` 序号从 1 重启、`retryId` 却是旧的。这违反 v4 会话格式的重试链规则
+  （`llm/retry skips its policy attempt sequence` / `must keep one retryId per policy chain`），
+  写入当时不报错，**下次打开会话才报 `stored log is corrupt`，整个会话无法加载**。
+  触发条件是同一 `turn:step` 连续失败超过 `maxRequestRetries` 次且仍在失败（供应商持续 5xx/连接重置）。
+  修复方式：
+  - 预算计数与重试链合并为一份状态（`retryChains` 里的 `{key, retryId, announced, spent, usable}`），
+    序号由链自己递增，不再由调用方传入，从结构上消除两者分叉的可能；
+  - 预算用尽后**不再清零**：之后每次失败都交给 `next()`，由内置 `@deepseek-ai/dsh-llm-retry`
+    接管（它用自己的 `policyKey` 连续计数，写出的行始终合法），整轮最终失败后再由续跑层开新轮、新预算；
+  - `session.append` 写失败时把该链标记为不可用，避免后续写入跳号。
+- 新增 3 项回归测试：预算耗尽后同一 `turn:step` 内序号只到 `maxRequestRetries` 为止、不重启；
+  `llm/retry-started` 不重复且逐条配对；新 `turn` 使用新的 `retryId` 并从 1 重新计数。
+
+### Notes
+
+- 已损坏的旧会话不会被修复逻辑回溯修复，需要用一次性脚本处理（按编号而非按值定位重启段，
+  把重启段迁到新链 `auto-retry#2` 等）。宿主的官方 v4 校验器可作为唯一验收标准。
+
 ## [1.0.1] - 2026-11-04
 
 ### Changed

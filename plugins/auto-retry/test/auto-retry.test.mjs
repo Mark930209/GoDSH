@@ -117,12 +117,76 @@ test('publishes a visible llm/retry notice so the retry is not a silent stall', 
   assert.ok(scheduled.data.delayMs >= 1);
   assert.equal(scheduled.data.failure.code, 'RATE_LIMIT');
   assert.equal(typeof scheduled.data.retryId, 'string');
+  assert.equal(scheduled.data.policyKey, 'auto-retry');
   // A second attempt joins the same chain instead of opening a new row.
   await retry(payload, async () => undefined);
   assert.equal(appended[2].data.retryId, scheduled.data.retryId);
   assert.equal(appended[2].data.retry, 2);
   assert.equal(started.data.retry, 1);
   assert.equal(started.data.retryId, scheduled.data.retryId);
+});
+
+test('never restarts a spent retry chain in the same turn/step', async () => {
+  // Regression for a corrupted-log bug: the budget counter used to be deleted
+  // when it ran out while the visible chain kept its retryId, so the next
+  // failure wrote retry=1 again under the old id. The v4 session format
+  // rejects that ("llm/retry skips its policy attempt sequence"), which only
+  // shows up the next time the session is loaded.
+  const { ctx, agent, listeners, appended } = makeContext();
+  const maxRequestRetries = 6;
+  apply(ctx, { initialRetryDelayMs: 1, maxRetryDelayMs: 2, jitterRatio: 0, maxRequestRetries });
+  const [retry] = listeners.get('agent/request-error');
+  const payload = requestFailure(agent);
+  let delegated = 0;
+  const next = async () => {
+    delegated += 1;
+    return undefined;
+  };
+
+  for (let attempt = 0; attempt < 40; attempt += 1) {
+    await retry(payload, next);
+  }
+
+  const scheduled = appended.filter((entry) => entry.type === 'llm/retry');
+  // Exactly one chain, numbered 1..max with no restart and no gap.
+  assert.deepEqual(scheduled.map((entry) => entry.data.retry), [1, 2, 3, 4, 5, 6]);
+  assert.equal(new Set(scheduled.map((entry) => entry.data.retryId)).size, 1, 'one retryId per policy chain');
+  // Everything past the budget is handed to the built-in retry policy.
+  assert.equal(delegated, 40 - maxRequestRetries);
+});
+
+test('llm/retry-started never repeats a scheduled attempt', async () => {
+  const { ctx, agent, listeners, appended } = makeContext();
+  apply(ctx, { initialRetryDelayMs: 1, maxRetryDelayMs: 2, jitterRatio: 0, maxRequestRetries: 4 });
+  const [retry] = listeners.get('agent/request-error');
+  const payload = requestFailure(agent);
+  for (let attempt = 0; attempt < 12; attempt += 1) await retry(payload, async () => undefined);
+
+  const scheduled = appended.filter((entry) => entry.type === 'llm/retry').map((entry) => entry.data);
+  const started = appended.filter((entry) => entry.type === 'llm/retry-started').map((entry) => entry.data);
+  const pair = (data) => `${data.retryId}:${data.retry}`;
+
+  assert.equal(new Set(started.map(pair)).size, started.length, 'no started attempt repeats');
+  assert.deepEqual(started.map(pair), scheduled.map(pair), 'every start pairs a scheduled attempt');
+});
+
+test('a new turn opens a new chain with a fresh retryId', async () => {
+  const { ctx, agent, listeners, emit, appended } = makeContext();
+  apply(ctx, { initialRetryDelayMs: 1, maxRetryDelayMs: 2, jitterRatio: 0, maxRequestRetries: 2, resumeAfterFailure: false });
+  const [retry] = listeners.get('agent/request-error');
+
+  const first = requestFailure(agent);
+  await retry(first, async () => undefined);
+  const firstId = appended[0].data.retryId;
+  emit('session/event', agent.session, turnEnd({ kind: 'completed' }));
+
+  // Next turn, same step number: the budget is fresh and the chain is new.
+  const second = { ...requestFailure(agent), turn: 2 };
+  await retry(second, async () => undefined);
+
+  const scheduled = appended.filter((entry) => entry.type === 'llm/retry').map((entry) => entry.data);
+  assert.deepEqual(scheduled.map((entry) => entry.retry), [1, 1]);
+  assert.notEqual(scheduled[1].retryId, firstId, 'a new chain must not reuse an earlier retryId');
 });
 
 test('a broken session.append cannot cancel the retry', async () => {

@@ -212,9 +212,23 @@ export function apply(ctx, config) {
   const options = resolveOptions(config);
   /** Pending timeouts, so unload never leaves a resume armed. */
   const timers = new Set();
-  /** sessionId -> Map<"turn:step", retriesUsed>. */
-  const requestAttempts = new Map();
-  /** sessionId -> { key, retryId }: one visible retry chain per turn/step. */
+  /**
+   * sessionId -> {
+   *   key: "turn:step",
+   *   retryId: the id shared by every attempt of this chain,
+   *   announced: how many attempts were actually written to the log,
+   *   spent: how many attempts the budget has paid for,
+   *   usable: false once a write failed (the numbering can no longer be trusted)
+   * }: the one visible retry chain of the turn/step in progress.
+   *
+   * All of it lives in one object on purpose. The retry number and the retryId
+   * are two halves of the same identity in the v4 session format: a chain is
+   * found by (turn, step, provider, policyKey) and its attempts must be
+   * numbered 1..n under a single retryId, with no gaps. Keeping the counter in
+   * a separate map let the two drift apart (counter reset, retryId kept), which
+   * produced a log that still looked fine at write time and was rejected as
+   * corrupt on the next load.
+   */
   const retryChains = new Map();
   /** sessionId -> { consecutive, timer }. */
   const resumeState = new Map();
@@ -235,16 +249,24 @@ export function apply(ctx, config) {
    * delay in its expandable body. Writing those events is the only sanctioned
    * way to make a Host-side retry visible, and it costs no model tokens: they
    * are session events, not messages.
+   *
+   * Returns `{ retryId, retry }` for the row that was written, or `undefined`
+   * when nothing was written. `retry` is derived from the chain itself, never
+   * handed in by the caller, so the sequence can only advance by one and a
+   * failed write leaves no gap behind.
    */
-  const announceRetry = (agent, payload, retry, maxRetries, delayMs) => {
+  const announceRetry = (agent, payload, maxRetries, delayMs) => {
     const session = agent.session;
     if (session === null || typeof session !== 'object' || typeof session.append !== 'function') return undefined;
     const key = `${payload.turn}:${payload.step}`;
     let chain = retryChains.get(agent.id);
     if (chain === undefined || chain.key !== key) {
-      chain = { key, retryId: randomUUID() };
+      // A brand-new turn/step opens a brand-new chain: fresh retryId, from 1.
+      chain = { key, retryId: randomUUID(), announced: 0, spent: 0, usable: true };
       retryChains.set(agent.id, chain);
     }
+    if (!chain.usable) return undefined;
+    const retry = chain.announced + 1;
     try {
       session.append('llm/retry', {
         retryId: chain.retryId,
@@ -259,11 +281,15 @@ export function apply(ctx, config) {
         failure: payload.failure
       });
     } catch (thrown) {
-      // Feedback is a courtesy; losing it must never cancel the retry.
+      // Feedback is a courtesy; losing it must never cancel the retry. The
+      // chain stops writing for this turn/step because a later row would skip
+      // an attempt number the log never saw.
+      chain.usable = false;
       note('info', `agent "${agent.id}": could not publish retry notice: ${String(thrown)}`);
       return undefined;
     }
-    return chain.retryId;
+    chain.announced = retry;
+    return { retryId: chain.retryId, retry };
   };
 
   /** Flip the retry row from "waiting" to "retried" once the wait elapsed. */
@@ -363,25 +389,40 @@ export function apply(ctx, config) {
       if (classifyFailure(failure, signal) === 'fatal') return next();
 
       const key = `${payload.turn}:${payload.step}`;
-      let perSession = requestAttempts.get(agent.id);
-      if (perSession === undefined) {
-        perSession = new Map();
-        requestAttempts.set(agent.id, perSession);
+      let chain = retryChains.get(agent.id);
+      if (chain === undefined || chain.key !== key) {
+        // First failure of this turn/step: the budget is fresh again.
+        chain = { key, retryId: randomUUID(), announced: 0, spent: 0, usable: true };
+        retryChains.set(agent.id, chain);
       }
-      const used = (perSession.get(key) ?? 0) + 1;
-      if (used > options.maxRequestRetries) {
-        perSession.delete(key);
-        note('warn', `agent "${agent.id}": request retry budget spent for turn ${key} (${describeFailure(failure)})`);
+      chain.spent += 1;
+      if (chain.spent > options.maxRequestRetries) {
+        // Never reset the budget here.
+        //
+        // The retry number and the retryId form one identity in the v4 session
+        // format: a chain is looked up by (turn, step, provider, policyKey) and
+        // must keep counting under a single retryId. Clearing the counter while
+        // the chain kept its retryId restarted the numbering at 1, which the
+        // format rejects with "llm/retry skips its policy attempt sequence" —
+        // silently at write time, and as an unreadable session on the next load.
+        //
+        // The budget therefore stays spent for the rest of this turn/step. Every
+        // further failure goes to `next()` and the built-in
+        // `@deepseek-ai/dsh-llm-retry` handles it (its own policyKey keeps its
+        // counter continuous, so its rows remain valid); once the turn finally
+        // fails, the resume layer below opens a new turn with a fresh budget.
+        if (chain.spent === options.maxRequestRetries + 1) {
+          note('warn', `agent "${agent.id}": request retry budget spent for turn ${key} (${describeFailure(failure)}); delegating further attempts to the built-in retry policy`);
+        }
         return next();
       }
-      perSession.set(key, used);
 
-      const delay = requestDelay(used, failure, options);
-      note('warn', `agent "${agent.id}": model request failed (${describeFailure(failure)}); retry ${used}/${options.maxRequestRetries} in ${delay}ms`);
-      const retryId = announceRetry(agent, payload, used, options.maxRequestRetries, delay);
+      const delay = requestDelay(chain.spent, failure, options);
+      note('warn', `agent "${agent.id}": model request failed (${describeFailure(failure)}); retry ${chain.spent}/${options.maxRequestRetries} in ${delay}ms`);
+      const announced = announceRetry(agent, payload, options.maxRequestRetries, delay);
       const elapsed = await sleep(delay, signal);
       if (!elapsed) return next();
-      announceRetryStarted(agent, payload, used, retryId);
+      if (announced !== undefined) announceRetryStarted(agent, payload, announced.retry, announced.retryId);
       return { kind: 'retry' };
     });
 
@@ -393,7 +434,8 @@ export function apply(ctx, config) {
       if (agent === undefined || agent.session !== session) return;
       const reason = event.data !== null && typeof event.data === 'object' ? event.data.reason : undefined;
       const kind = reason !== null && typeof reason === 'object' ? reason.kind : undefined;
-      requestAttempts.delete(sessionId);
+      // The chain (and its budget) ends with the turn: the next turn/step
+      // opens a new chain with a new retryId and a fresh budget.
       retryChains.delete(sessionId);
       if (kind === 'error') {
         scheduleResume(agent, reason);
@@ -415,7 +457,6 @@ export function apply(ctx, config) {
       const state = resumeState.get(agent.id);
       if (state !== undefined) clearResumeTimer(state);
       resumeState.delete(agent.id);
-      requestAttempts.delete(agent.id);
       retryChains.delete(agent.id);
     });
 
@@ -424,7 +465,6 @@ export function apply(ctx, config) {
     return () => {
       for (const timer of timers) clearTimeout(timer);
       timers.clear();
-      requestAttempts.clear();
       retryChains.clear();
       resumeState.clear();
     };
