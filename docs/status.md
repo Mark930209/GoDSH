@@ -43,6 +43,16 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 
 ## 已完成（时间线）
 
+- **2026-11-05 · `n1n-prompt-tools` 借鉴 `dsh-llm-text-tools`**：对照参考插件补齐
+  `emptyResponseGuard`（reasoning-only 的 `stop` 判为可重试 `EMPTY_RESPONSE`）、
+  `dropEmptyTurns`（不再回放空 assistant 回合）、`includeSchemas`（可只看参数名前缀），
+  协议文本显式禁写 DSML/XML 并附示例行；测试 59 项。
+  **缓存实测**（`scripts/_cache_report.mjs`、`_cache_cause.mjs`）：Cybertron 会话 212 步、
+  prompt 合计 2191 万 token、整体命中 56.5%，但 99% 与 0–13% 反复跳变——同一会话里
+  工具集哈希始终不变，说明**崩塌不是 tools 字段引起**，更像网关侧前缀缓存过期/淘汰。
+  出站拦截最终落在 `LlmRuntime#streamWithRegistration`（唯一汇聚点），因为
+  `llm/stream` 的兜底闭包固定捕获原 options，且请求对象被 `deepFreeze`。
+
 - **2026-11-03 · 仓库 GitHub 化**：`origin` 指向 GoDSH；CI（`validate` / `release` / `pages`）、
   `scripts/validate-plugins.mjs`、`scripts/release.mjs`、`scripts/make-market-index.mjs`、
   `repo.config.json` 单一配置源；GitHub Pages 托管市场索引。
