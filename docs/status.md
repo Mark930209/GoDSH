@@ -43,6 +43,15 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 
 ## 已完成（时间线）
 
+- **2026-11-05 · `n1n-prompt-tools` 重启后实测通过**：DSH 于 21:25:36 重启，`llm:patch ok=true`，
+  进程内 11 次 `llm:rewrite` 全部配对到 `stream`（**0 孤儿**），11 条流均为 `TEXT tools=0`、
+  `downgraded=false`（此前的 `autoDetect` 降级是旧进程的记忆，重启后自动恢复文本协议）。
+  turn 5 的 12 个步骤每步都解析出工具调用，**真实泄漏 0 次**（判据收紧为"正文含调用语法且
+  该消息没解析出 call"；早先按关键字粗筛出的 7 条是回复里正常出现 `@@TOOL@@` 字样的误报，
+  每条都带 1–3 个已解析调用）。缓存命中率 10 步平均 89%。前缀仍稳定（`catHash=f4cc79f3`）。
+  63 项单元测试全绿。校验脚本：`scripts/_verify_plugin.mjs`（日志侧配对）、
+  `scripts/_verify_session.mjs` / `_verify_session2.mjs`（会话侧泄漏与命中率）。
+
 - **2026-11-05 · `n1n-prompt-tools` 修复 DSML 落进正文（出站/入站合并为单一权威点）**：
   真实故障是 `turn 3 step 1` 把 `<｜｜DSML｜｜ invoke …>` 原样写进正文（1393 字符），整轮没
   执行任何工具。对同一段文本做了 1876 种分片回归（1 字符 / 7 字符 / 逐位置二分 / 三刀网格）
