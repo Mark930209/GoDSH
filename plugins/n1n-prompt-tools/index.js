@@ -995,11 +995,13 @@ export function apply(ctx, config) {
     /**
      * Consecutive failed attempts per route.
      *
-     * A demotion is expensive: it rewrites the request prefix every step (the
-     * catalogue leaves the system prompt, native `tools` come back), so the
-     * prompt cache is discarded and the route runs ~18 points colder for the
-     * rest of the process. It therefore has to be earned by repeated evidence,
-     * and any reply that parses cleanly must clear the debt.
+     * A demotion is expensive: it rewrites the request prefix (the catalogue
+     * leaves the system prompt, native `tools` come back), so the next request
+     * cannot reuse the cached prefix and misses outright - measured at 0%, 0%
+     * and 1% on the three real switches in session-9ca0ab1a. The demoted mode
+     * itself is not colder; only the switch costs the prefix. Either way it has
+     * to be earned by repeated evidence, and any reply that parses cleanly
+     * clears the debt.
      */
     const strikes = new Map();
 
