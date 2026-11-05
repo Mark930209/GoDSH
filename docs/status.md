@@ -43,6 +43,24 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 
 ## 已完成（时间线）
 
+- **2026-11-05 · 重启复验 + 修掉"并发导致降级"的真 bug**。DSH 于 22:36 重启后：`llm:patch ok=true`、
+  `downgraded=false`、`tools=0`、`sysHasCatalog=true`、`catHash=f4cc79f3`（31967 字符）、
+  `prefixHash=eadd98b9` 连续四步不变、`paired 12 / orphaned 0`。重启后 6 个请求：首个 0%
+  （切换本身），其余 **5/5 全中，平均 99%**。
+
+  但日志暴露了上一版修复**没有真正生效**：`strikes` 的 key 只有 `provider::model`，并发流共用
+  一个计数器。`14:04:25` 那一毫秒 `glm-5.3` 出现 12 条 stream，`2` 次阈值瞬间凑满，
+  `deepseek-v4.1-flash` 随即在 `14:04:25.202` 被降级并持续到重启——**用户会话在为子 agent 的
+  失败买单**。已修（`a5aa896`）：key 改为 `route::sessionId`（`llm/stream` 瀑布签名是
+  `(options, next)`，没有 agent 对象，`sessionId` 是唯一可用隔离维度；无 session 的子 agent
+  共用一个桶，因为群体失败本身就是模型的证据），并加 `autoDetectBurstMs`（默认 2000ms）
+  让同一次 burst 只确认不累加。测试 67 → 69。
+
+  另外顺带证伪了参考插件 `dsh-llm-text-tools` 的立论：把工具目录撑到 12K tokens 后，
+  `native` 与 `text` 两臂都是 98–99%，且**缓存都随对话增长**（每步 +128），"tools 字段把缓存
+  钉在 4096" 在当前网关上复现不出来（`scripts/_tools_field_ab.mjs`）。这意味着插件现在的
+  缓存收益是 0，价值只在行为偏好——是否保留见待办。
+
 - **2026-11-05 · 前缀缓存排查结论：网关不是瓶颈，插件自伤才是**。对 `llm-api.net` 做了受控
   实验，结论有三条：
 
@@ -164,12 +182,18 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
      用户抢话应取消待续跑；点停止不应续跑。
 2. `docs/publishing.md` 记录的两个 npm 账号坑若再遇到，按文档处理（2FA token / `0.0.0-stage` 占位）。
 3. **`n1n-prompt-tools` 冒烟**：装到 desktop profile 后，在 n1n 的会话里让模型做一次工具调用
-   （如读取文件），确认：工具真的执行、UI 正常显示、会话记录里 assistant 是 `tool-call` 块；
-   再观察多步 `cache_read` 是否随上下文增长。若模型不遵循文本协议则把该 provider 从 `providers` 移除。
-   **重启后重点看一件事**：日志里不应再出现被"讨论插件"触发的 `auto-detect` 降级；若真降级，
-   应能看到 `2/2` 的连续计数而不是一次即降。
-4. 可选：在 npmjs.com 用 2FA 手动删掉三个包的 `0.0.0-stage` 占位版本，让包页干净。
-5. 计划新插件：`node scripts\new-plugin.mjs dsh-xxx`。
+   （如读取文件），确认：工具真的执行、UI 正常显示、会话记录里 assistant 是 `tool-call` 块。
+   **重启后重点看两件事**：日志里不应再出现被"讨论插件"触发的 `auto-detect` 降级；并发子 agent
+   同时失败时应看到 `burst: true` 而不是计数直接跳到 2。
+4. **决定插件去留**（数据已齐，待用户拍板）：
+   - 事实一：网关的 `tools` 字段不再阻止缓存增长（12K tokens 目录下两臂都是 98–99%）；
+   - 事实二：健康窗口内 text 与 native 命中率同为 94%。
+   两者说明**插件当前的缓存收益是 0**。"保住 94%"不靠插件也能达到。
+   - 保留的理由只能是行为偏好（让模型看到目录），成本是多一层解析器与降级风险；
+   - 停用的理由是少一层故障面——本会话的故障根因都在这一层。
+   若要验证，用 `scripts/_cache_window_compare.mjs` 在重启后跑一个真实 turn 对比。
+5. 可选：在 npmjs.com 用 2FA 手动删掉三个包的 `0.0.0-stage` 占位版本，让包页干净。
+6. 计划新插件：`node scripts\new-plugin.mjs dsh-xxx`。
 
 ## 恢复记录（2026-11-03 误删事故）
 
