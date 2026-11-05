@@ -320,13 +320,23 @@ test('an unidentified route keeps native tool calling', () => {
 function fakeCtx() {
   const handlers = new Map();
   const notes = [];
-  return {
+  const ctx = {
     handlers,
     notes,
+    llm: {
+      calls: [],
+      streamWithRegistration(request, prepared) {
+        this.calls.push(request);
+        return { handed: request, prepared };
+      }
+    },
     logger: {
       info: (line) => notes.push(['info', line]),
       warn: (line) => notes.push(['warn', line]),
       error: (line) => notes.push(['error', line])
+    },
+    inject(_services, callback) {
+      return callback(ctx);
     },
     on(event, handler) {
       handlers.set(event, handler);
@@ -336,6 +346,7 @@ function fakeCtx() {
       return fn();
     }
   };
+  return ctx;
 }
 
 /**
@@ -506,6 +517,36 @@ test('the stream hook only wraps a text-protocol (tools-less) n1n request', () =
   // The n1n text-protocol request is wrapped into a transform iterable.
   const wrapped = stream({ provider: 'n1n', model: 'deepseek-v4.1-flash', tools: [] }, next);
   assert.notEqual(wrapped, passthrough);
+});
+
+test('the runtime patch replaces a frozen request before the adapter sees it', () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'] });
+
+  const tools = TOOLS.filter((tool) => tool.deferLoading !== true);
+  const original = Object.freeze({
+    provider: 'n1n',
+    model: 'deepseek-v4.1-flash',
+    tools: Object.freeze(tools),
+    messages: Object.freeze([Object.freeze({ role: 'system', content: 'base prompt' })]),
+    sessionId: 's-1'
+  });
+
+  const { handed } = ctx.llm.streamWithRegistration(original, undefined);
+  assert.deepEqual(handed.tools, [], 'the adapter must receive no tools');
+  assert.ok(handed.messages[0].content.startsWith('base prompt'));
+  assert.ok(handed.messages[0].content.includes('@@TOOL@@'));
+  assert.equal(handed.sessionId, 's-1', 'the envelope must be preserved');
+  assert.equal(handed.provider, 'n1n');
+  assert.equal(original.tools.length, tools.length, 'the frozen request must be left untouched');
+
+  // A route outside the allow-list is handed through untouched.
+  const foreign = { provider: 'strata', model: 'm', tools, messages: [] };
+  assert.equal(ctx.llm.streamWithRegistration(foreign, undefined).handed, foreign);
+
+  // No tools: nothing to rewrite.
+  const plain = { provider: 'n1n', model: 'deepseek-v4.1-flash', messages: [] };
+  assert.equal(ctx.llm.streamWithRegistration(plain, undefined).handed, plain);
 });
 
 test('the stream hook strips tools in place when the outbound half did not', () => {

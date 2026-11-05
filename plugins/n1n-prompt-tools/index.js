@@ -831,8 +831,12 @@ export function apply(ctx, config) {
       diag({
         hook: 'assemble:entered',
         via,
-        raw: assembly === undefined ? 'undefined' : Array.isArray(assembly?.sections) ? 'assembly' : typeof assembly,
-        after: assembled === null || typeof assembled !== 'object' ? String(assembled) : Array.isArray(assembled.sections) ? 'assembly' : typeof assembled
+        agentId: context?.agent?.id ?? null,
+        rawTools: Array.isArray(assembly?.tools) ? assembly.tools.length : 'none',
+        afterTools: Array.isArray(assembled?.tools) ? assembled.tools.length : 'none',
+        sections: Array.isArray(assembled?.sections) ? assembled.sections.length : 'none',
+        provider: assembled?.variables?.provider ?? null,
+        model: assembled?.variables?.model ?? null
       });
       if (assembled === null || typeof assembled !== 'object') return assembled;
       // `installModelSelection` publishes the selected route as prompt
@@ -948,6 +952,63 @@ export function apply(ctx, config) {
     }
     diag({ hook: 'agents:attached', count: attached.size });
 
+    /**
+     * Rewrite one outbound request for an eligible route.
+     *
+     * `llm/stream` listeners cannot do this: the waterfall fallback closes over
+     * the original object, and the loop's request is deep-frozen, so neither a
+     * listener return value nor an in-place edit reaches the adapter. Both
+     * dispatch paths (`llm.stream` and `preparedCall.stream`) funnel through
+     * `LlmRuntime#streamWithRegistration`, so the request is replaced there.
+     */
+    const rewriteOutbound = (request) => {
+      try {
+        if (request === null || typeof request !== 'object') return request;
+        if (!routeAllowed(options, request.provider, request.model)) return request;
+        if (isNative(request.provider, request.model)) return request;
+        const tools = Array.isArray(request.tools) ? request.tools : [];
+        if (tools.length === 0) return request;
+
+        const catalog = renderToolCatalog(tools, options);
+        catalogs.set(routeKey(request.provider, request.model), captureTypes(tools));
+        const messages = Array.isArray(request.messages) ? [...request.messages] : [];
+        const first = messages[0];
+        if (first !== null && typeof first === 'object' && first.role === 'system') {
+          const content = typeof first.content === 'string' ? `${first.content}\n\n${catalog}` : catalog;
+          messages[0] = { ...first, content };
+        } else {
+          messages.unshift({ role: 'system', content: catalog });
+        }
+        diag({ hook: 'llm:rewrite', ok: true, tools: tools.length, sessionId: request.sessionId ?? null });
+        return { ...request, tools: [], messages };
+      } catch (error) {
+        diag({ hook: 'llm:rewrite', ok: false, reason: String(error) });
+        return request;
+      }
+    };
+
+    let restoreStreamWithRegistration;
+    try {
+      ctx.inject(['llm'], (llmCtx) => {
+        const service = llmCtx.llm;
+        const original = service?.streamWithRegistration;
+        if (typeof original !== 'function') {
+          diag({ hook: 'llm:patch', ok: false, reason: 'no-method' });
+          return;
+        }
+        const patched = function patchedStreamWithRegistration(request, prepared) {
+          return original.call(this, rewriteOutbound(request), prepared);
+        };
+        service.streamWithRegistration = patched;
+        restoreStreamWithRegistration = () => {
+          if (service.streamWithRegistration === patched) service.streamWithRegistration = original;
+        };
+        diag({ hook: 'llm:patch', ok: true });
+      });
+    } catch (error) {
+      diag({ hook: 'llm:patch', ok: false, reason: String(error) });
+    }
+
     const disposeStream = ctx.on('llm/stream', (request, next) => {
       // The request carries the frozen route, so this is the authoritative gate.
       const allowed = routeAllowed(options, request?.provider, request?.model);
@@ -967,6 +1028,9 @@ export function apply(ctx, config) {
               return false;
             })
           : 'no-messages',
+        sessionId: request?.sessionId ?? null,
+        toolNames: Array.isArray(request?.tools) ? request.tools.slice(0, 3).map((tool) => tool?.name ?? '?') : null,
+        frozen: request !== null && typeof request === 'object' ? Object.isFrozen(request) : null,
         messageCount: Array.isArray(request?.messages) ? request.messages.length : -1
       });
       if (toolsPresent && !(allowed && !isNative(request?.provider, request?.model))) return next();
@@ -1037,6 +1101,11 @@ export function apply(ctx, config) {
       disposeRootAssemble();
       disposeCreated();
       disposeDisposed();
+      try {
+        restoreStreamWithRegistration?.();
+      } catch {
+        // The runtime may already be gone.
+      }
       for (const dispose of attached.values()) {
         try {
           dispose();
