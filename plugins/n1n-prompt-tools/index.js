@@ -784,10 +784,18 @@ export function apply(ctx, config) {
       const assembled = await next();
       if (assembled === null || typeof assembled !== 'object') return assembled;
       // `installModelSelection` publishes the selected route as prompt
-      // variables; the agent options are only a fallback. An unidentified
-      // route stays native.
-      const provider = assembled.variables?.provider ?? context?.agent?.options?.provider;
-      const model = assembled.variables?.model ?? context?.agent?.options?.model;
+      // variables — but only after the user has explicitly picked a model.
+      // A session still on its default model has no variables at all, so the
+      // frozen request header is the next best source of truth, then the agent
+      // options. An unidentified route stays native.
+      let header;
+      try {
+        header = context?.agent?.session?.requestHeader?.()?.config;
+      } catch {
+        header = undefined;
+      }
+      const provider = assembled.variables?.provider ?? header?.provider ?? context?.agent?.options?.provider;
+      const model = assembled.variables?.model ?? header?.model ?? context?.agent?.options?.model;
       if (!routeAllowed(options, provider, model)) return assembled;
       if (isNative(provider, model)) return assembled;
       const tools = Array.isArray(assembled.tools) ? assembled.tools : [];

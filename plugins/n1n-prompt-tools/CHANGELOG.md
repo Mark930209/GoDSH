@@ -20,7 +20,11 @@
   provider/model 路由降级为原生 `tools`，本进程后续不再改写它。
 - 新增 `denyModels` 黑名单（优先级高于 `models`）与 `parseStrippedRoutes` 兜底：
   请求没有 `tools` 字段时仍然解析回复，避免"漏出标记后整轮停住"。
-- 测试增至 44 项。
+- **修复闸门认不出路由**：`installModelSelection` 只在用户**显式选过模型**时才写
+  `variables.provider`；会话停在默认模型时它是空的，于是插件把自己拒绝掉、退回原生 tools。
+  路由解析改为三级兜底：`variables` → `context.agent.session.requestHeader().config`
+  （上一跳真实路由）→ `agent.options`，仍认不出就继续走原生。
+- 测试增至 45 项。
 
 ## 1.0.0 — 2026-11-05
 

@@ -367,6 +367,50 @@ test('assemble rewrites the n1n route and leaves other providers untouched', asy
   }
 });
 
+test('assemble falls back to the session request header when variables are absent', async () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'] });
+  const assemble = ctx.handlers.get('system-prompt/assemble');
+
+  // A session still on its default model has no selection variables at all.
+  const bare = {
+    sections: [{ name: 'base', text: 'you are a helpful agent', interpolate: false }],
+    tools: TOOLS.filter((tool) => tool.deferLoading !== true),
+    contexts: []
+  };
+  const context = {
+    agent: { session: { requestHeader: () => ({ config: { provider: 'n1n', model: 'deepseek-v4.1-flash' } }) } }
+  };
+  const rewritten = await assemble(bare, context, async () => bare);
+  assert.deepEqual(rewritten.tools, [], 'the frozen n1n header must enable the text protocol');
+  assert.equal(rewritten.sections.length, 2);
+
+  // The same fallback must refuse a foreign frozen route.
+  const foreign = {
+    sections: [{ name: 'base', text: 'you are a helpful agent', interpolate: false }],
+    tools: TOOLS.filter((tool) => tool.deferLoading !== true),
+    contexts: []
+  };
+  const foreignContext = {
+    agent: { session: { requestHeader: () => ({ config: { provider: 'strata', model: 'qwen3.8-flash-next-iq3_s' } }) } }
+  };
+  const kept = await assemble(foreign, foreignContext, async () => foreign);
+  assert.equal(kept, foreign, 'a foreign frozen route must stay native');
+
+  // A throwing requestHeader must not break the turn.
+  const broken = {
+    agent: {
+      session: {
+        requestHeader: () => {
+          throw new Error('no header yet');
+        }
+      }
+    }
+  };
+  const safe = await assemble(bare, broken, async () => bare);
+  assert.equal(safe, bare);
+});
+
 test('the stream hook only wraps a text-protocol (tools-less) n1n request', () => {
   const ctx = fakeCtx();
   apply(ctx, { providers: ['n1n'] });
