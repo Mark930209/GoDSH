@@ -43,6 +43,32 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 
 ## 已完成（时间线）
 
+- **2026-11-05 · 前缀缓存排查结论：网关不是瓶颈，插件自伤才是**。对 `llm-api.net` 做了受控
+  实验，结论有三条：
+
+  1. **网关缓存工作良好**。追加式请求（模拟真实会话逐步增长）命中率 88–98%；固定前缀连发
+     18 次有 13 次命中（72%）；强制每次新建连接仍有 97%——不存在连接亲和问题。响应头有
+     `x-routing-group: Self-Deployed-2`，18 次采样**从未切换路由组**，所以"多后端轮询导致
+     粘性未命中"这个假设**被证伪**。
+  2. **亲和头无效**。交错 A/B（`x-session-affinity` + `session_id` + `prompt_cache_key`）跑了
+     两轮：20 轮时 baseline 90% / affinity 100%，45 轮时 baseline 96% / affinity 89%——
+     方向相反，合计等于无差异。`prompt_cache_retention: "24h"` 也不影响（等待 6 分钟后两臂
+     都 94%），说明 n1n 路由不实现该字段，与 asar 里"仅 `api.openai.com` 才发
+     `prompt_cache_key`"一致。
+  3. **真实会话的低命中是"故障期"造成的，不是上下文大小**。按 5 分钟墙钟分桶：09:25–10:10Z
+     （插件故障期）0–6%，13:25–13:40Z（修复后）94/95/94/71%。按 turn 看更直接：turn 1 = 13%、
+     turn 4 = 36%、**turn 5 = 94%、turn 6 = 91%**。而 turn 1 内部"较小一半 8% / 较大一半 18%"，
+     大小并不驱动 miss——早先"上下文越大越差"的判断被推翻。
+
+  **唯一确定可修的缓存损失**：模式切换。3 次切换后第一个请求命中率分别是 0%、0%、1%（3/3）。
+  降级会让工具目录离开系统提示词、原生 `tools` 回来，前缀整个变掉。已在
+  `a801f12` 修复（收紧判据 + 连续失败才降级）。
+  在同一健康窗口内 text 94% / native 94%——**降级模式本身并不更冷**，代价只在切换那一瞬。
+
+  脚本：`_cache_growing_probe.mjs`（追加式）、`_cache_routing_group.mjs`（路由组）、
+  `_cache_ab_interleaved.mjs`（交错 A/B）、`_cache_ttl2.mjs`（TTL）、
+  `_cache_switch_cost.mjs` / `_cache_window_compare.mjs`（切换代价）、`_cache_timeline2.mjs`。
+
 - **2026-11-05 · `n1n-prompt-tools` 重启后实测通过**：DSH 于 21:25:36 重启，`llm:patch ok=true`，
   进程内 11 次 `llm:rewrite` 全部配对到 `stream`（**0 孤儿**），11 条流均为 `TEXT tools=0`、
   `downgraded=false`（此前的 `autoDetect` 降级是旧进程的记忆，重启后自动恢复文本协议）。
@@ -140,6 +166,8 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 3. **`n1n-prompt-tools` 冒烟**：装到 desktop profile 后，在 n1n 的会话里让模型做一次工具调用
    （如读取文件），确认：工具真的执行、UI 正常显示、会话记录里 assistant 是 `tool-call` 块；
    再观察多步 `cache_read` 是否随上下文增长。若模型不遵循文本协议则把该 provider 从 `providers` 移除。
+   **重启后重点看一件事**：日志里不应再出现被"讨论插件"触发的 `auto-detect` 降级；若真降级，
+   应能看到 `2/2` 的连续计数而不是一次即降。
 4. 可选：在 npmjs.com 用 2FA 手动删掉三个包的 `0.0.0-stage` 占位版本，让包页干净。
 5. 计划新插件：`node scripts\new-plugin.mjs dsh-xxx`。
 
