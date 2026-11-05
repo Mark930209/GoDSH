@@ -171,6 +171,12 @@ export function resolveOptions(config) {
     if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) return fallback;
     return value;
   };
+  // Like `strikes`, but 0 is meaningful: it turns the burst window off.
+  const counter = (key, fallback) => {
+    const value = raw[key];
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 0) return fallback;
+    return value;
+  };
   return {
     enabled: bool('enabled', true),
     // Anything other than n1n is dropped here, so a stale config row cannot
@@ -189,6 +195,10 @@ export function resolveOptions(config) {
     // for every session until the process restarts, and each demotion rewrites
     // the request prefix and throws away the prompt cache with it.
     autoDetectStrikes: strikes('autoDetectStrikes', 2),
+    // Failures closer together than this are one burst, not separate evidence.
+    // Parallel subagents settle within milliseconds, so counting each of them
+    // would let a single burst demote a route that the user is actively using.
+    autoDetectBurstMs: counter('autoDetectBurstMs', 2000),
     // Never leave a tools-less reply unparsed: if some other layer removed the
     // tools, still convert its markup into real calls rather than dead text.
     parseStrippedRoutes: bool('parseStrippedRoutes', true),
@@ -993,17 +1003,34 @@ export function apply(ctx, config) {
     let armed = true;
 
     /**
-     * Consecutive failed attempts per route.
+     * Consecutive failed attempts, per route **and per session**.
+     *
+     * Keying only on the route let concurrent work share one counter: a burst of
+     * subagents failing on the same model pushed the route to the threshold in a
+     * single millisecond, which demoted the user's own conversation as well. The
+     * `llm/stream` waterfall only passes `(options, next)`, so there is no agent
+     * object to key on; `options.sessionId` is the only isolation the hook
+     * offers. Subagent requests have no session and therefore share one bucket -
+     * that is intentional, since a burst of subagents is exactly the evidence
+     * that the *model* cannot follow the protocol.
      *
      * A demotion is expensive: it rewrites the request prefix (the catalogue
      * leaves the system prompt, native `tools` come back), so the next request
      * cannot reuse the cached prefix and misses outright - measured at 0%, 0%
      * and 1% on the three real switches in session-9ca0ab1a. The demoted mode
-     * itself is not colder; only the switch costs the prefix. Either way it has
-     * to be earned by repeated evidence, and any reply that parses cleanly
-     * clears the debt.
+     * itself is not colder; only the switch costs the prefix.
      */
     const strikes = new Map();
+
+    /**
+     * How close two failures must be to count as one burst.
+     *
+     * Streams settle within milliseconds of each other when several agents run
+     * in parallel, and treating those as separate strikes is what let one burst
+     * demote a route. Genuine per-turn failures are seconds apart. Set to 0 to
+     * count every failure separately.
+     */
+    const STRIKE_BURST_MS = options.autoDetectBurstMs;
 
     /**
      * Record one reply's verdict for a route.
@@ -1011,15 +1038,24 @@ export function apply(ctx, config) {
      * `suspicious` is already narrowed to call-*shaped* text by
      * `looksLikeCallAttempt`, so prose about the protocol does not count.
      */
-    const judgeRoute = (provider, model, toolCalls, suspicious) => {
+    const judgeRoute = (provider, model, sessionId, toolCalls, suspicious) => {
       if (!options.autoDetect) return;
-      const key = routeKey(provider, model);
+      const route = routeKey(provider, model);
+      const key = `${route}::${typeof sessionId === 'string' && sessionId.length > 0 ? sessionId : '~anonymous'}`;
       if (!suspicious) {
         strikes.delete(key);
         return;
       }
-      const count = (strikes.get(key) ?? 0) + 1;
-      strikes.set(key, count);
+      const now = Date.now();
+      const prior = strikes.get(key);
+      // Same burst: another parallel stream failing at the same moment. It
+      // corroborates the existing strike rather than adding a new one.
+      if (prior !== undefined && now - prior.at < STRIKE_BURST_MS) {
+        diag({ hook: 'auto-detect', ok: true, model, strikes: prior.count, needed: options.autoDetectStrikes, burst: true });
+        return;
+      }
+      const count = (prior?.count ?? 0) + 1;
+      strikes.set(key, { count, at: now });
       if (count < options.autoDetectStrikes) {
         diag({ hook: 'auto-detect', ok: true, model, strikes: count, needed: options.autoDetectStrikes });
         note(
@@ -1029,7 +1065,7 @@ export function apply(ctx, config) {
         );
         return;
       }
-      downgraded.set(key, 'native');
+      downgraded.set(route, 'native');
       diag({ hook: 'auto-detect', ok: true, model, strikes: count, downgraded: true });
       note(
         'warn',
@@ -1039,16 +1075,16 @@ export function apply(ctx, config) {
     };
 
     /** Inbound parser options for one route. */
-    const inboundFor = (provider, model) => ({
+    const inboundFor = (provider, model, sessionId) => ({
       marker: options.marker,
       emptyResponseGuard: options.emptyResponseGuard,
       argumentTypes: catalogs.get(routeKey(provider, model)),
-      onSettle: ({ toolCalls, suspicious }) => judgeRoute(provider, model, toolCalls, suspicious)
+      onSettle: ({ toolCalls, suspicious }) => judgeRoute(provider, model, sessionId, toolCalls, suspicious)
     });
 
     /** Wrap a reply, resolving it first if the waterfall answered asynchronously. */
     const parseReply = (stream, request) => {
-      const inbound = inboundFor(request?.provider, request?.model);
+      const inbound = inboundFor(request?.provider, request?.model, request?.sessionId);
       if (stream !== null && typeof stream === 'object' && typeof stream.then === 'function') {
         return stream.then((resolved) => createInboundTransform(resolved, inbound));
       }
@@ -1354,7 +1390,8 @@ export function apply(ctx, config) {
           marker: options.marker,
           emptyResponseGuard: options.emptyResponseGuard,
           argumentTypes: catalogs.get(routeKey(request?.provider, request?.model)),
-          onSettle: ({ toolCalls, suspicious }) => judgeRoute(request?.provider, request?.model, toolCalls, suspicious)
+          onSettle: ({ toolCalls, suspicious }) =>
+            judgeRoute(request?.provider, request?.model, request?.sessionId, toolCalls, suspicious)
         });
       }
       // Safety net: a request with no tools on a route we did not rewrite means

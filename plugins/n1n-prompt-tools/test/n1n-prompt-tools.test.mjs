@@ -911,7 +911,8 @@ const BROKEN_CALL = '@@TOOL@@ {"name":"read","arguments":{"file_path":"a.txt"';
 
 test('auto-detect demotes only after repeated protocol failures', async () => {
   const ctx = fakeCtx();
-  apply(ctx, { providers: ['n1n'], autoDetect: true });
+  // Burst window off: this test is about the count, not about timing.
+  apply(ctx, { providers: ['n1n'], autoDetect: true, autoDetectBurstMs: 0 });
   const assemble = ctx.handlers.get('system-prompt/assemble');
   const stream = ctx.handlers.get('llm/stream');
 
@@ -920,8 +921,7 @@ test('auto-detect demotes only after repeated protocol failures', async () => {
   assert.deepEqual((await assemble(first, {}, async () => first)).tools, []);
 
   // One failure is not enough. Demoting rewrites the request prefix, which
-  // discards the prompt cache and runs the route colder for the rest of the
-  // process, so it must be earned by repeated evidence.
+  // discards the prompt cache, so it must be earned by repeated evidence.
   await feed(stream, BROKEN_CALL);
   assert.equal(
     ctx.notes.some(([level, line]) => level === 'warn' && line.includes('falling back to native tools')),
@@ -941,6 +941,50 @@ test('auto-detect demotes only after repeated protocol failures', async () => {
   // Next step: the same route keeps native tools.
   const second = assemblyFor('n1n', 'glm-5.3');
   assert.equal((await assemble(second, {}, async () => second)).tools.length, 2);
+});
+
+test('a burst of parallel failures counts once', async () => {
+  const ctx = fakeCtx();
+  // Default burst window: streams settling within 2s are one attempt.
+  apply(ctx, { providers: ['n1n'], autoDetect: true });
+  const stream = ctx.handlers.get('llm/stream');
+
+  // Twelve subagents failing at the same instant is one piece of evidence, not
+  // twelve. Counting each of them demoted routes the user was actively using.
+  for (let i = 0; i < 12; i += 1) await feed(stream, BROKEN_CALL);
+
+  assert.equal(
+    ctx.notes.some(([level, line]) => level === 'warn' && line.includes('falling back to native tools')),
+    false,
+    'one burst must not demote'
+  );
+  const next = assemblyFor('n1n', 'glm-5.3');
+  const assemble = ctx.handlers.get('system-prompt/assemble');
+  assert.deepEqual((await assemble(next, {}, async () => next)).tools, [], 'the route keeps the text protocol');
+});
+
+test('strikes are isolated per session', async () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'], autoDetect: true, autoDetectBurstMs: 0 });
+  const stream = ctx.handlers.get('llm/stream');
+
+  // Two different sessions each fail once. Neither has two consecutive
+  // failures, so neither may be demoted on the other's evidence.
+  await feed(stream, BROKEN_CALL, { provider: 'n1n', model: 'glm-5.3', sessionId: 'session-a' });
+  await feed(stream, BROKEN_CALL, { provider: 'n1n', model: 'glm-5.3', sessionId: 'session-b' });
+
+  assert.equal(
+    ctx.notes.some(([level, line]) => level === 'warn' && line.includes('falling back to native tools')),
+    false,
+    'failures in different sessions must not accumulate'
+  );
+
+  // The same session failing twice does demote.
+  await feed(stream, BROKEN_CALL, { provider: 'n1n', model: 'glm-5.3', sessionId: 'session-a' });
+  assert.ok(
+    ctx.notes.some(([level, line]) => level === 'warn' && line.includes('falling back to native tools')),
+    'a repeat failure in one session must demote'
+  );
 });
 
 test('a clean reply clears the failure streak', async () => {
