@@ -1,6 +1,6 @@
 - insert:
-    - id: prompt-tools
-      name: 'dsh-prompt-tools'
+    - id: n1n-prompt-tools
+      name: 'dsh-n1n-prompt-tools'
       config:
         enabled: true
         # 空数组表示对所有 provider 生效；默认只作用于报告缓存问题的 n1n 网关。

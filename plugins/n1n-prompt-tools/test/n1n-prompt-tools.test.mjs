@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderToolCatalog, stableStringify, extractToolCall, createInboundTransform } from '../index.js';
+import { renderToolCatalog, stableStringify, extractToolCall, extractInvokeCall, createInboundTransform } from '../index.js';
 
 const TOOLS = [
   {
@@ -189,4 +189,89 @@ test('custom marker is honoured', async () => {
   );
   assert.equal(toolBlocks.length, 1);
   assert.equal(toolBlocks[0].name, 'read');
+});
+
+// --- XML-form invoke blocks: what the model emits when its native tool syntax
+// --- leaks into a text-only protocol. These must not leak as visible text.
+
+const XML_CALL = [
+  '<｜DSML｜ calls>',
+  '<｜DSML｜ invoke name="plugin_manager">',
+  '<｜DSML｜ parameter name="action" string="true">list_plugins</｜DSML｜ parameter>',
+  '<｜DSML｜ parameter name="offset" string="false">25</｜DSML｜ parameter>',
+  '</｜DSML｜ invoke>',
+  '</｜DSML｜ calls>'
+].join('\n');
+
+test('extractInvokeCall parses an invoke block with typed parameters', () => {
+  const parsed = extractInvokeCall(
+    '<｜DSML｜ invoke name="pwsh"><｜DSML｜ parameter name="command" string="true">ls</｜DSML｜ parameter><｜DSML｜ parameter name="timeout" string="false">5</｜DSML｜ parameter></｜DSML｜ invoke>'
+  );
+  assert.equal(parsed.state, 'ok');
+  assert.equal(parsed.name, 'pwsh');
+  assert.deepEqual(JSON.parse(parsed.argsJson), { command: 'ls', timeout: 5 });
+});
+
+test('an XML invoke block becomes one tool call and leaves no framing text', async () => {
+  const { text, toolBlocks, blocks } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: '\n\n' + XML_CALL },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'raw' } }
+  ]);
+  assert.equal(toolBlocks.length, 1);
+  assert.equal(toolBlocks[0].name, 'plugin_manager');
+  assert.deepEqual(JSON.parse(toolBlocks[0].arguments), { action: 'list_plugins', offset: 25 });
+  assert.equal(text, '');
+  assert.ok(!blocks.some((block) => block.type === 'text' && block.text.includes('invoke')), 'no tag text may leak');
+});
+
+test('XML invoke split across many chunks is reassembled', async () => {
+  const parts = [XML_CALL.slice(0, 9), XML_CALL.slice(9, 40), XML_CALL.slice(40, 61), XML_CALL.slice(61)];
+  const chunks = [blockStart(0, 'text')];
+  for (const part of parts) chunks.push({ type: 'text-delta', index: 0, text: part });
+  chunks.push({ type: 'block-end', index: 0, block: { type: 'text', text: 'raw' } });
+  const { text, toolBlocks } = await runTransform(chunks);
+  assert.equal(toolBlocks.length, 1);
+  assert.equal(toolBlocks[0].name, 'plugin_manager');
+  assert.equal(text, '');
+});
+
+test('an unclosed invoke block at end of stream is released as text', async () => {
+  const { text, toolBlocks } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: '<｜DSML｜ invoke name="read">\n<｜DSML｜ parameter name="path" string="true">a.txt' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'raw' } }
+  ]);
+  assert.equal(toolBlocks.length, 0);
+  assert.ok(text.includes('invoke'), 'unparseable text must not be swallowed');
+});
+
+test('prose before and after an XML invoke block survives', async () => {
+  const { text, toolBlocks } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: 'Let me check.\n' + XML_CALL + '\nDone.' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'raw' } }
+  ]);
+  assert.equal(toolBlocks.length, 1);
+  assert.equal(text, 'Let me check.\n\nDone.');
+});
+
+test('a code fence wrapping an XML invoke block is stripped', async () => {
+  const { text, toolBlocks } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: '```xml\n' + XML_CALL + '\n```' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'raw' } }
+  ]);
+  assert.equal(toolBlocks.length, 1);
+  assert.equal(text, '');
+});
+
+test('two XML invoke blocks in one message both parse', async () => {
+  const { toolBlocks, text } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: XML_CALL + '\n' + XML_CALL },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'raw' } }
+  ]);
+  assert.equal(toolBlocks.length, 2);
+  assert.equal(text, '');
 });

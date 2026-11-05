@@ -1,8 +1,8 @@
 {
-  "name": "dsh-prompt-tools",
+  "name": "dsh-n1n-prompt-tools",
   "version": "1.0.0",
   "type": "module",
-  "description": "Moves the tool catalog into the cached system prompt and removes the native tools field, then parses @@TOOL@@ text calls back into harness tool-call blocks, to keep prefix-cache hits stable on OpenAI-compatible gateways.",
+  "description": "n1n gateway only. Moves the tool catalog into the cached system prompt and removes the native tools field, then parses text tool calls back into harness tool-call blocks, to keep prefix-cache hits stable on the n1n deepseek-v4.1-flash endpoint.",
   "author": "Mark930209 <guimaxingtian@163.com>",
   "license": "MIT",
   "keywords": [
@@ -15,11 +15,11 @@
     "openai-compatible",
     "prefix-cache"
   ],
-  "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/prompt-tools",
+  "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/n1n-prompt-tools",
   "repository": {
     "type": "git",
     "url": "https://github.com/Mark930209/GoDSH.git",
-    "directory": "plugins/prompt-tools"
+    "directory": "plugins/n1n-prompt-tools"
   },
   "scripts": {
     "check": "node --check index.js",
