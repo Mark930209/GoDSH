@@ -89,8 +89,58 @@ const PARAMETER_OPEN = /^<parameter\s*=\s*([^>\s]+)\s*>/;
 const PARAMETER_CLOSE = '</parameter>';
 const FUNCTION_CLOSE = '</function>';
 
-/** Anything that looks like an attempt to call a tool, used by auto-detection. */
-const CALL_ATTEMPT = /(@@TOOL@@|<tool_call|<function\s*=|DSML)/;
+/**
+ * A *call-shaped* attempt, used by auto-detection.
+ *
+ * Deliberately stricter than "the text mentions the protocol". A model (or a
+ * user) legitimately writes about `@@TOOL@@`, `<tool_call>` and DSML when
+ * discussing this plugin, and every one of those replies has zero parsed calls
+ * by construction. Treating a mere mention as a failed attempt silently and
+ * permanently demoted the route to native tools mid-session — which also
+ * invalidated the prompt cache, because dropping the catalogue from the system
+ * prompt changes the request prefix.
+ *
+ * So each alternative here requires the opener to be followed by a call body:
+ * the marker needs an object or a `name`, the tag dialects need their shape.
+ */
+const CALL_ATTEMPT_TAIL = [
+  // <tool_call> followed by a body, not an empty opener at the end of a line
+  String.raw`<tool_call\s*>\s*\S`,
+  // <function=name>
+  String.raw`<function\s*=\s*[^>\s]+`,
+  // <|DSML| invoke name="x"> (the pipe renders both as one char and doubled)
+  String.raw`[|｜]{1,2}\s*DSML\s*[|｜]{1,2}\s*invoke\s+name\s*=`
+];
+
+/** One compiled matcher per marker; there are only a handful of markers. */
+const CALL_ATTEMPT_CACHE = new Map();
+
+function callAttemptPattern(marker) {
+  let pattern = CALL_ATTEMPT_CACHE.get(marker);
+  if (pattern === undefined) {
+    const escaped = marker.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // The marker alternative is concatenated with its own required body; joining
+    // it as a separate `|` branch would let a bare mention match on its own.
+    const source = [String.raw`${escaped}\s*\{`, ...CALL_ATTEMPT_TAIL].join('|');
+    pattern = new RegExp(source);
+    CALL_ATTEMPT_CACHE.set(marker, pattern);
+  }
+  return pattern;
+}
+
+/** Code spans and fences, where prose legitimately quotes the protocol. */
+const CODE_SPAN = /```[\s\S]*?```|`[^`\n]*`/g;
+
+/**
+ * Whether a reply looks like a genuine *failed* tool-call attempt.
+ *
+ * Quoted examples inside code spans/fences are removed first: docs and
+ * explanations about the protocol live there, and they are not attempts.
+ */
+export function looksLikeCallAttempt(text, marker = '@@TOOL@@') {
+  if (typeof text !== 'string' || text.length === 0) return false;
+  return callAttemptPattern(marker).test(text.replace(CODE_SPAN, ' '));
+}
 /** Any single tag, used to find the earliest opener inside prose. */
 const ANY_TAG = /<[^<>]{1,120}>/g;
 
@@ -116,6 +166,11 @@ export function resolveOptions(config) {
     if (!Array.isArray(raw[key])) return fallback;
     return raw[key].filter((value) => typeof value === 'string' && value.length > 0);
   };
+  const strikes = (key, fallback) => {
+    const value = raw[key];
+    if (typeof value !== 'number' || !Number.isInteger(value) || value < 1) return fallback;
+    return value;
+  };
   return {
     enabled: bool('enabled', true),
     // Anything other than n1n is dropped here, so a stale config row cannot
@@ -128,6 +183,12 @@ export function resolveOptions(config) {
     // When a model visibly fails the text protocol, fall back to native tools
     // for the rest of the process instead of showing raw markup.
     autoDetect: bool('autoDetect', true),
+    // How many *consecutive* failed attempts must be seen before a route is
+    // demoted. One is not enough: a single odd turn (a summary, a doc snippet, a
+    // reply that merely describes the protocol) would otherwise demote the model
+    // for every session until the process restarts, and each demotion rewrites
+    // the request prefix and throws away the prompt cache with it.
+    autoDetectStrikes: strikes('autoDetectStrikes', 2),
     // Never leave a tools-less reply unparsed: if some other layer removed the
     // tools, still convert its markup into real calls rather than dead text.
     parseStrippedRoutes: bool('parseStrippedRoutes', true),
@@ -846,7 +907,7 @@ export async function* createInboundTransform(source, options = {}) {
   // Auto-detection: a reply that shows tool-call syntax but yielded no call
   // means this model cannot follow the text protocol.
   if (onSettle !== null) {
-    onSettle({ toolCalls: toolSequence, suspicious: toolSequence === 0 && CALL_ATTEMPT.test(visibleText) });
+    onSettle({ toolCalls: toolSequence, suspicious: toolSequence === 0 && looksLikeCallAttempt(visibleText, marker) });
   }
 
   if (pendingFinish !== null) {
@@ -931,19 +992,56 @@ export function apply(ctx, config) {
      */
     let armed = true;
 
+    /**
+     * Consecutive failed attempts per route.
+     *
+     * A demotion is expensive: it rewrites the request prefix every step (the
+     * catalogue leaves the system prompt, native `tools` come back), so the
+     * prompt cache is discarded and the route runs ~18 points colder for the
+     * rest of the process. It therefore has to be earned by repeated evidence,
+     * and any reply that parses cleanly must clear the debt.
+     */
+    const strikes = new Map();
+
+    /**
+     * Record one reply's verdict for a route.
+     *
+     * `suspicious` is already narrowed to call-*shaped* text by
+     * `looksLikeCallAttempt`, so prose about the protocol does not count.
+     */
+    const judgeRoute = (provider, model, toolCalls, suspicious) => {
+      if (!options.autoDetect) return;
+      const key = routeKey(provider, model);
+      if (!suspicious) {
+        strikes.delete(key);
+        return;
+      }
+      const count = (strikes.get(key) ?? 0) + 1;
+      strikes.set(key, count);
+      if (count < options.autoDetectStrikes) {
+        diag({ hook: 'auto-detect', ok: true, model, strikes: count, needed: options.autoDetectStrikes });
+        note(
+          'warn',
+          `${model} showed tool-call syntax but produced ${toolCalls} call(s); ` +
+            `keeping the text protocol (${count}/${options.autoDetectStrikes})`
+        );
+        return;
+      }
+      downgraded.set(key, 'native');
+      diag({ hook: 'auto-detect', ok: true, model, strikes: count, downgraded: true });
+      note(
+        'warn',
+        `${model} showed tool-call syntax but produced ${toolCalls} call(s) ` +
+          `${count}x in a row; falling back to native tools for this route`
+      );
+    };
+
     /** Inbound parser options for one route. */
     const inboundFor = (provider, model) => ({
       marker: options.marker,
       emptyResponseGuard: options.emptyResponseGuard,
       argumentTypes: catalogs.get(routeKey(provider, model)),
-      onSettle: ({ toolCalls, suspicious }) => {
-        if (!options.autoDetect || !suspicious) return;
-        downgraded.set(routeKey(provider, model), 'native');
-        note(
-          'warn',
-          `${model} showed tool-call syntax but produced ${toolCalls} call(s); falling back to native tools for this route`
-        );
-      }
+      onSettle: ({ toolCalls, suspicious }) => judgeRoute(provider, model, toolCalls, suspicious)
     });
 
     /** Wrap a reply, resolving it first if the waterfall answered asynchronously. */
@@ -1254,15 +1352,7 @@ export function apply(ctx, config) {
           marker: options.marker,
           emptyResponseGuard: options.emptyResponseGuard,
           argumentTypes: catalogs.get(routeKey(request?.provider, request?.model)),
-          onSettle: ({ toolCalls, suspicious }) => {
-            if (!options.autoDetect || !suspicious) return;
-            downgraded.set(routeKey(request?.provider, request?.model), 'native');
-            note(
-              'warn',
-              `${request?.model} showed tool-call syntax but produced ${toolCalls} call(s); ` +
-                'falling back to native tools for this route'
-            );
-          }
+          onSettle: ({ toolCalls, suspicious }) => judgeRoute(request?.provider, request?.model, toolCalls, suspicious)
         });
       }
       // Safety net: a request with no tools on a route we did not rewrite means

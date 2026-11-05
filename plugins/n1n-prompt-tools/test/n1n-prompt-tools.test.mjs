@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderToolCatalog, stableStringify, extractToolCall, extractInvokeCall, extractToolCallBlock, createInboundTransform, resolveOptions, routeAllowed, apply } from '../index.js';
+import { renderToolCatalog, stableStringify, extractToolCall, extractInvokeCall, extractToolCallBlock, createInboundTransform, resolveOptions, routeAllowed, apply, looksLikeCallAttempt } from '../index.js';
 
 const TOOLS = [
   {
@@ -894,7 +894,22 @@ test('the transform turns a streamed `<tool_call>` into a tool-call block', asyn
   assert.deepEqual(JSON.parse(toolBlocks[0].arguments), { file_path: 'a.txt' });
 });
 
-test('auto-detect falls back to native tools after a visible protocol failure', async () => {
+/** Feed one reply through `llm/stream` and drain it. */
+async function feed(stream, text, route = { provider: 'n1n', model: 'glm-5.3' }) {
+  const wrapped = stream({ ...route, tools: [] }, () =>
+    (async function* () {
+      yield blockStart(0, 'text');
+      yield { type: 'text-delta', index: 0, text };
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: '' } };
+    })()
+  );
+  for await (const chunk of wrapped) void chunk;
+}
+
+/** A call-shaped opener the parser cannot consume: it never closes its brace. */
+const BROKEN_CALL = '@@TOOL@@ {"name":"read","arguments":{"file_path":"a.txt"';
+
+test('auto-detect demotes only after repeated protocol failures', async () => {
   const ctx = fakeCtx();
   apply(ctx, { providers: ['n1n'], autoDetect: true });
   const assemble = ctx.handlers.get('system-prompt/assemble');
@@ -904,16 +919,20 @@ test('auto-detect falls back to native tools after a visible protocol failure', 
   const first = assemblyFor('n1n', 'glm-5.3');
   assert.deepEqual((await assemble(first, {}, async () => first)).tools, []);
 
-  // The model then answers with markup the parser cannot consume.
-  const wrapped = stream({ provider: 'n1n', model: 'glm-5.3', tools: [] }, () =>
-    (async function* () {
-      yield blockStart(0, 'text');
-      yield { type: 'text-delta', index: 0, text: 'ok<tool_call>read  file_path="a.txt"</arg_value>' };
-      yield { type: 'block-end', index: 0, block: { type: 'text', text: '' } };
-    })()
+  // One failure is not enough. Demoting rewrites the request prefix, which
+  // discards the prompt cache and runs the route colder for the rest of the
+  // process, so it must be earned by repeated evidence.
+  await feed(stream, BROKEN_CALL);
+  assert.equal(
+    ctx.notes.some(([level, line]) => level === 'warn' && line.includes('falling back to native tools')),
+    false,
+    'a single failure must not demote'
   );
-  for await (const chunk of wrapped) void chunk;
+  const stillText = assemblyFor('n1n', 'glm-5.3');
+  assert.deepEqual((await assemble(stillText, {}, async () => stillText)).tools, [], 'still on the text protocol');
 
+  // A second consecutive failure is real evidence.
+  await feed(stream, BROKEN_CALL);
   assert.ok(
     ctx.notes.some(([level, line]) => level === 'warn' && line.includes('falling back to native tools')),
     'the fallback must be logged'
@@ -924,20 +943,83 @@ test('auto-detect falls back to native tools after a visible protocol failure', 
   assert.equal((await assemble(second, {}, async () => second)).tools.length, 2);
 });
 
+test('a clean reply clears the failure streak', async () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'], autoDetect: true });
+  const assemble = ctx.handlers.get('system-prompt/assemble');
+  const stream = ctx.handlers.get('llm/stream');
+
+  // Alternate failure and success: the streak never reaches two, so the route
+  // must survive. This interleaving is what a chatty session actually looks like.
+  for (let i = 0; i < 3; i += 1) {
+    await feed(stream, BROKEN_CALL);
+    await feed(stream, '@@TOOL@@ {"name":"read","arguments":{"file_path":"a.txt"}}');
+  }
+
+  assert.equal(
+    ctx.notes.some(([level, line]) => level === 'warn' && line.includes('falling back to native tools')),
+    false,
+    'interleaved failures must not demote'
+  );
+  const next = assemblyFor('n1n', 'glm-5.3');
+  assert.deepEqual((await assemble(next, {}, async () => next)).tools, []);
+});
+
+test('talking about the protocol does not demote the route', async () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'], autoDetect: true });
+  const assemble = ctx.handlers.get('system-prompt/assemble');
+  const stream = ctx.handlers.get('llm/stream');
+
+  // This reply mentions the marker, the tag dialect and DSML, but makes no call.
+  // Treating that as a failed attempt is how a discussion of this very plugin
+  // silently demoted the route mid-session and cost it the prompt cache.
+  const prose =
+    'The parser rewrites @@TOOL@@ markers and also understands <tool_call> and DSML. ' +
+    'For example `@@TOOL@@ {"name":"read"}` becomes a tool call.';
+  for (let i = 0; i < 4; i += 1) await feed(stream, prose);
+
+  assert.equal(ctx.notes.some(([level]) => level === 'warn'), false, 'no warning for prose');
+  const next = assemblyFor('n1n', 'glm-5.3');
+  assert.deepEqual((await assemble(next, {}, async () => next)).tools, [], 'route keeps the text protocol');
+});
+
+test('looksLikeCallAttempt separates a mention from a call', () => {
+  const attempts = [
+    '@@TOOL@@ {"name":"read","arguments":{}}',
+    BROKEN_CALL,
+    '<tool_call>read  file_path="a.txt"</arg_value>',
+    '<function=read>',
+    '<|DSML| invoke name="read">'
+  ];
+  for (const text of attempts) assert.equal(looksLikeCallAttempt(text), true, `attempt: ${text}`);
+
+  const mentions = [
+    'talking about @@TOOL@@ and DSML and <tool_call>',
+    '`@@TOOL@@ {"name":"read"}`',
+    '```\n@@TOOL@@ {"name":"read"}\n```',
+    'the marker is @@TOOL@@',
+    '',
+    null,
+    undefined
+  ];
+  for (const text of mentions) assert.equal(looksLikeCallAttempt(text), false, `mention: ${String(text)}`);
+});
+
+test('the configured marker drives the attempt check', () => {
+  assert.equal(looksLikeCallAttempt('CALL-> {"name":"read"}', 'CALL->'), true);
+});
+
 test('auto-detect leaves a well-behaved route alone', async () => {
   const ctx = fakeCtx();
   apply(ctx, { providers: ['n1n'], autoDetect: true });
   const assemble = ctx.handlers.get('system-prompt/assemble');
   const stream = ctx.handlers.get('llm/stream');
 
-  const wrapped = stream({ provider: 'n1n', model: 'deepseek-v4.1-flash', tools: [] }, () =>
-    (async function* () {
-      yield blockStart(0, 'text');
-      yield { type: 'text-delta', index: 0, text: '@@TOOL@@ {"name":"read","arguments":{"file_path":"a.txt"}}' };
-      yield { type: 'block-end', index: 0, block: { type: 'text', text: '' } };
-    })()
-  );
-  for await (const chunk of wrapped) void chunk;
+  await feed(stream, '@@TOOL@@ {"name":"read","arguments":{"file_path":"a.txt"}}', {
+    provider: 'n1n',
+    model: 'deepseek-v4.1-flash'
+  });
 
   assert.equal(ctx.notes.some(([level]) => level === 'warn'), false);
   const next = assemblyFor('n1n', 'deepseek-v4.1-flash');
