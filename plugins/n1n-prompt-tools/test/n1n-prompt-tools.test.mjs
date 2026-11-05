@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderToolCatalog, stableStringify, extractToolCall, extractInvokeCall, createInboundTransform, resolveOptions, routeAllowed } from '../index.js';
+import { renderToolCatalog, stableStringify, extractToolCall, extractInvokeCall, createInboundTransform, resolveOptions, routeAllowed, apply } from '../index.js';
 
 const TOOLS = [
   {
@@ -312,4 +312,88 @@ test('an unidentified route keeps native tool calling', () => {
   const options = resolveOptions({});
   assert.equal(routeAllowed(options, undefined, undefined), false);
   assert.equal(routeAllowed(options, 'n1n', undefined), true, 'n1n with no model narrowing still applies');
+});
+
+// --- End-to-end gate: run apply() against a fake context and assert that a
+// --- non-n1n route is passed through completely untouched.
+
+function fakeCtx() {
+  const handlers = new Map();
+  const notes = [];
+  return {
+    handlers,
+    notes,
+    logger: {
+      info: (line) => notes.push(['info', line]),
+      warn: (line) => notes.push(['warn', line]),
+      error: (line) => notes.push(['error', line])
+    },
+    on(event, handler) {
+      handlers.set(event, handler);
+      return () => handlers.delete(event);
+    },
+    effect(fn) {
+      return fn();
+    }
+  };
+}
+
+function assemblyFor(provider, model) {
+  return {
+    sections: [{ name: 'base', text: 'you are a helpful agent', interpolate: false }],
+    tools: TOOLS.filter((tool) => tool.deferLoading !== true),
+    contexts: [],
+    variables: { provider, model }
+  };
+}
+
+test('assemble rewrites the n1n route and leaves other providers untouched', async () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'] });
+  const assemble = ctx.handlers.get('system-prompt/assemble');
+  assert.ok(assemble, 'the assemble hook must be registered');
+
+  const n1n = assemblyFor('n1n', 'deepseek-v4.1-flash');
+  const rewritten = await assemble(n1n, {}, async () => n1n);
+  assert.deepEqual(rewritten.tools, [], 'n1n tools must be removed from the request');
+  assert.equal(rewritten.sections.length, 2);
+  assert.ok(rewritten.sections[1].text.includes('## read'));
+
+  for (const provider of ['strata', 'deepseek', 'N1N', '', undefined]) {
+    const other = assemblyFor(provider, 'some-model');
+    const kept = await assemble(other, {}, async () => other);
+    assert.equal(kept, other, `provider ${String(provider)} must be returned untouched`);
+    assert.equal(kept.tools.length, 2, `provider ${String(provider)} must keep native tools`);
+  }
+});
+
+test('the stream hook only wraps a text-protocol (tools-less) n1n request', () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'] });
+  const stream = ctx.handlers.get('llm/stream');
+  assert.ok(stream, 'the stream hook must be registered');
+
+  const passthrough = { marker: 'passthrough' };
+  const next = () => passthrough;
+
+  // An n1n request that still carries native tools is left alone.
+  assert.equal(stream({ provider: 'n1n', model: 'deepseek-v4.1-flash', tools: [{ name: 'read' }] }, next), passthrough);
+  for (const provider of ['strata', 'deepseek', '', undefined]) {
+    assert.equal(stream({ provider, model: 'm', tools: [] }, next), passthrough, `provider ${String(provider)} must not be wrapped`);
+  }
+  // The n1n text-protocol request is wrapped into a transform iterable.
+  const wrapped = stream({ provider: 'n1n', model: 'deepseek-v4.1-flash', tools: [] }, next);
+  assert.notEqual(wrapped, passthrough);
+});
+
+test('a models list narrows the gate end to end', async () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'], models: ['deepseek-v4.1-flash'] });
+  const assemble = ctx.handlers.get('system-prompt/assemble');
+
+  const allowed = assemblyFor('n1n', 'deepseek-v4.1-flash');
+  assert.deepEqual((await assemble(allowed, {}, async () => allowed)).tools, []);
+
+  const blocked = assemblyFor('n1n', 'glm-5.3');
+  assert.equal((await assemble(blocked, {}, async () => blocked)).tools.length, 2);
 });

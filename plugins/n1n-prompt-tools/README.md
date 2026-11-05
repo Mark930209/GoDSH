@@ -85,10 +85,11 @@ node --check index.js
 node --test test/n1n-prompt-tools.test.mjs
 ```
 
-27 项单元测试覆盖：确定性渲染、marker 跨 chunk、JSON 跨 chunk、字符串内花括号与转义、
+30 项单元测试覆盖：确定性渲染、marker 跨 chunk、JSON 跨 chunk、字符串内花括号与转义、
 代码围栏、多个调用、reasoning 透传、空文本块丢弃、扁平参数容错、XML invoke 块（含跨 chunk、
 多调用、代码围栏、未闭合回落）、未完成调用回落文本，以及**供应商硬限制**（默认只允许 n1n、
-空数组不生效、混合列表被过滤、`models` 收窄、未知路由拒绝）。
+空数组不生效、混合列表被过滤、`models` 收窄、未知路由拒绝，含 3 项直接跑 `apply()` 两个
+hook 的端到端断言：非 n1n 路由的 `tools` 数组原样返回、请求不被包装）。
 
 ## 协议一致性（实测，2026-11-05）
 

@@ -81,8 +81,8 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
   代码围栏、多调用、扁平参数容错）。**供应商硬限制**：只作用于 `provider === 'n1n'`，
   `resolveOptions` 把配置里混入的其它 provider 丢弃、`routeAllowed` 拒绝非 n1n 路由、
   出站入站双水位各自校验，且**移除了「空数组 = 全部 provider」的开关**（空数组 = 不生效）；
-  另加可选 `models` 白名单（n1n 内 `glm-5.3` 不遵循文本协议，需排除）。27 项单元测试
-  （其中 5 项专门测这道闸门）；`deepseek-v4.1-flash` 实测协议可被正确解析，本会话 `tools`
+  另加可选 `models` 白名单（n1n 内 `glm-5.3` 不遵循文本协议，需排除）。30 项单元测试
+  （其中 8 项专门测这道闸门，含 3 项直接跑 `apply()` 两个 hook 的端到端断言）；`deepseek-v4.1-flash` 实测协议可被正确解析，本会话 `tools`
   字段已消失、命中率 98~99%。
   注：受控 A/B 显示 `tools` 字段并非真实长会话缓存塌陷的唯一/主要成因（更像网关多后端随机
   未命中），插件保证“连续确定性文本前缀”这一前提，详见插件 README 的实测结论。
