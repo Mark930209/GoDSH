@@ -53,6 +53,8 @@ Host 插件，挂两个水位（waterfall）事件，不需要任何 `@deepseek-
 | `models` | `[]` | 可选白名单，按模型收窄；空数组 = n1n 下所有模型 |
 | `denyModels` | `[]` | 可选黑名单，永远走原生 `tools`；优先级高于 `models` |
 | `autoDetect` | `true` | 回复里出现调用语法却没解析出调用时，自动把该路由降级为原生 `tools` |
+| `autoDetectStrikes` | `2` | 连续失败几次才降级。降级会改写请求前缀、使缓存失效，所以默认要两次连续证据 |
+| `autoDetectBurstMs` | `2000` | 间隔小于该窗口的失败算同一次 burst，只确认不累加；设 0 则每次失败都单独计数 |
 | `parseStrippedRoutes` | `true` | 请求没有 `tools` 字段时仍解析回复，避免漏标记后整轮停住 |
 | `includeSchemas` | `true` | 是否在提示词里附完整 JSON Schema；关掉只留参数名，缓存前缀更短 |
 | `emptyResponseGuard` | `true` | 「无可见正文且无工具调用」的 `stop` 判为可重试的 `EMPTY_RESPONSE` |
