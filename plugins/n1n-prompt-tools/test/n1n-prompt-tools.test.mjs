@@ -40,6 +40,133 @@ async function runTransform(chunks, options = {}) {
   return { out, text, blocks, toolBlocks };
 }
 
+test('an empty assistant turn is dropped from the replayed history', () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'] });
+  const request = {
+    provider: 'n1n',
+    model: 'deepseek-v4.1-flash',
+    tools: TOOLS.filter((tool) => tool.deferLoading !== true),
+    messages: [
+      { role: 'system', content: 'base prompt' },
+      { role: 'user', content: [{ type: 'text', text: 'do the thing' }] },
+      { role: 'assistant', content: [{ type: 'reasoning', text: 'hmm' }] },
+      { role: 'assistant', content: [{ type: 'text', text: 'ok' }] },
+      { role: 'assistant', content: [{ type: 'tool-call', id: 'c1', name: 'read', arguments: '{}' }] },
+      { role: 'tool', toolCallId: 'c1', content: [{ type: 'text', text: 'done' }] }
+    ]
+  };
+  const { handed } = ctx.llm.streamWithRegistration(request, undefined);
+  const roles = handed.messages.map((message) => message.role);
+  assert.deepEqual(roles, ['system', 'user', 'assistant', 'assistant', 'tool']);
+  assert.equal(handed.messages[2].content[0].text, 'ok', 'the visible answer survives');
+  assert.equal(handed.messages[3].content[0].type, 'tool-call', 'the tool call survives');
+  assert.equal(request.messages.length, 6, 'the frozen request is untouched');
+});
+
+test('dropEmptyTurns can be turned off', () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'], dropEmptyTurns: false });
+  const request = {
+    provider: 'n1n',
+    model: 'deepseek-v4.1-flash',
+    tools: TOOLS.filter((tool) => tool.deferLoading !== true),
+    messages: [
+      { role: 'system', content: 'base' },
+      { role: 'assistant', content: [{ type: 'reasoning', text: 'hmm' }] }
+    ]
+  };
+  const { handed } = ctx.llm.streamWithRegistration(request, undefined);
+  assert.equal(handed.messages.length, 2, 'the empty turn is kept when the option is off');
+});
+
+test('a reasoning-only stop becomes a retryable EMPTY_RESPONSE', async () => {
+  // The reference adapter calls this the "thinks but never answers" failure:
+  // the turn settles completed with an empty bubble and nothing retries.
+  const { out } = await runTransform([
+    blockStart(0, 'reasoning'),
+    { type: 'reasoning-delta', index: 0, text: 'thinking about the request' },
+    { type: 'block-end', index: 0, block: { type: 'reasoning', text: 'thinking about the request' } },
+    { type: 'finish', reason: { kind: 'stop' } }
+  ]);
+  const finish = out.at(-1);
+  assert.equal(finish.type, 'finish');
+  assert.equal(finish.reason.kind, 'error');
+  assert.equal(finish.reason.failure.code, 'EMPTY_RESPONSE');
+});
+
+test('a real answer keeps its plain stop', async () => {
+  const { out } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: 'Here is the answer.' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'Here is the answer.' } },
+    { type: 'finish', reason: { kind: 'stop' } }
+  ]);
+  assert.deepEqual(out.at(-1).reason, { kind: 'stop' });
+});
+
+test('a turn that only called a tool keeps its plain stop', async () => {
+  const { out } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: '@@TOOL@@ {"name":"read","arguments":{"path":"a.txt"}}\n' },
+    { type: 'finish', reason: { kind: 'stop' } }
+  ]);
+  assert.deepEqual(out.at(-1).reason, { kind: 'stop' });
+});
+
+test('a native tool call keeps its plain stop', async () => {
+  const { out } = await runTransform([
+    blockStart(0, 'tool-call'),
+    { type: 'tool-call-delta', index: 0, id: 'c1', name: 'read', argumentsDelta: '{"path":"a.txt"}' },
+    { type: 'block-end', index: 0, block: { type: 'tool-call', id: 'c1', name: 'read', arguments: '{"path":"a.txt"}' } },
+    { type: 'finish', reason: { kind: 'stop' } }
+  ]);
+  assert.deepEqual(out.at(-1).reason, { kind: 'stop' });
+});
+
+test('truncation keeps its max-tokens finish', async () => {
+  const { out } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: 'partial' },
+    { type: 'finish', reason: { kind: 'max-tokens' } }
+  ]);
+  assert.deepEqual(out.at(-1).reason, { kind: 'max-tokens' });
+});
+
+test('emptyResponseGuard can be turned off', async () => {
+  const { out } = await runTransform(
+    [
+      blockStart(0, 'reasoning'),
+      { type: 'reasoning-delta', index: 0, text: 'hmm' },
+      { type: 'finish', reason: { kind: 'stop' } }
+    ],
+    { emptyResponseGuard: false }
+  );
+  assert.deepEqual(out.at(-1).reason, { kind: 'stop' });
+});
+
+test('the catalog is byte-identical regardless of the input tool order', () => {
+  const forward = renderToolCatalog(TOOLS, {});
+  const reversed = renderToolCatalog([...TOOLS].reverse(), {});
+  assert.equal(forward, reversed);
+  assert.equal(forward, renderToolCatalog(TOOLS, {}));
+  assert.ok(!forward.includes('deferred_tool'), 'deferLoading tools stay out of the prefix');
+});
+
+test('includeSchemas off keeps parameter names but drops the schema text', () => {
+  const withSchemas = renderToolCatalog(TOOLS, {});
+  const namesOnly = renderToolCatalog(TOOLS, { includeSchemas: false });
+  assert.ok(withSchemas.length > namesOnly.length);
+  assert.ok(namesOnly.includes('Parameters: cmd'), 'parameter names survive');
+  assert.ok(!namesOnly.includes('"type":"object"'), 'no JSON Schema body');
+});
+
+test('the protocol text explicitly forbids the DSML dialect', () => {
+  const catalog = renderToolCatalog(TOOLS, {});
+  assert.match(catalog, /DSML/);
+  assert.ok(catalog.includes('@@TOOL@@ {"name":"read","arguments":{"file_path"'), 'a worked example is included');
+});
+
 test('stableStringify sorts keys recursively', () => {
   assert.equal(stableStringify({ b: 1, a: { d: 2, c: 3 } }), '{"a":{"c":3,"d":2},"b":1}');
 });

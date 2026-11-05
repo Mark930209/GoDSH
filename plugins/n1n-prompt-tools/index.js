@@ -131,6 +131,16 @@ export function resolveOptions(config) {
     // Never leave a tools-less reply unparsed: if some other layer removed the
     // tools, still convert its markup into real calls rather than dead text.
     parseStrippedRoutes: bool('parseStrippedRoutes', true),
+    // Embed each tool's JSON Schema in the prompt. Turning it off shrinks the
+    // cacheable prefix at the cost of the model seeing argument types.
+    includeSchemas: bool('includeSchemas', true),
+    // A `stop` with no visible text and no tool call is a dead turn; report it
+    // as EMPTY_RESPONSE so the runtime retries instead of showing an empty bubble.
+    emptyResponseGuard: bool('emptyResponseGuard', true),
+    // Replaying an assistant turn that has neither text nor a tool call pushes a
+    // reasoning model into repeating the empty answer. Dropping it also keeps
+    // the cached prefix shorter.
+    dropEmptyTurns: bool('dropEmptyTurns', true),
     marker: text('marker', '@@TOOL@@')
   };
 }
@@ -167,6 +177,7 @@ export function stableStringify(value) {
  */
 export function renderToolCatalog(tools, options) {
   const marker = options?.marker ?? '@@TOOL@@';
+  const includeSchemas = options?.includeSchemas !== false;
   const byName = [...tools]
     .filter((tool) => tool !== null && typeof tool === 'object' && tool.deferLoading !== true)
     .sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
@@ -174,17 +185,27 @@ export function renderToolCatalog(tools, options) {
   const lines = [
     '# Tool use protocol',
     '',
-    'Native tool calling is disabled for this request. The tools below are declared in this prompt instead.',
-    'To call a tool, emit one line that starts with the marker below, followed by one JSON object:',
+    'This API has no native function-calling channel. Tool calls are ordinary assistant text,',
+    `and only lines that begin with the marker below are executed.`,
+    '',
+    `Do NOT use XML, angle-bracket tags, or any other tool syntax. Never write <tool_call>,`,
+    '<invoke>, <parameter>, or similar markup, and do not fall back to DeepSeek DSML tags',
+    '(<|DSML| calls> / <|DSML| invoke>): only the marker line is executed reliably.',
+    '',
+    'To call a tool, emit one line starting with the marker, followed by exactly one JSON object:',
     '',
     `${marker} {"name":"<tool-name>","arguments":{...}}`,
+    '',
+    'Worked example, calling a tool named `read` that takes `file_path`:',
+    '',
+    `${marker} {"name":"read","arguments":{"file_path":"C:\\\\repo\\\\package.json"}}`,
     '',
     'Rules:',
     '- "name" must exactly match one of the tool names below.',
     '- "arguments" must be a JSON object that satisfies that tool\'s parameter schema.',
     `- Put each call on its own line. One JSON object per ${marker} line; several lines call several tools.`,
     '- Do not wrap the call in a code fence and do not put prose on the same line.',
-    '- Do not use any other tool-call syntax: no XML tags, no <invoke> blocks, no function-call JSON.',
+    `- Text outside a ${marker} line is shown to the user as your reply.`,
     '- After the call line(s), stop. The harness runs the call(s) and returns the results as tool messages.',
     `- If no tool is needed, answer normally and do not emit ${marker}.`,
     '',
@@ -195,10 +216,19 @@ export function renderToolCatalog(tools, options) {
     lines.push('');
     lines.push(`## ${tool.name}`);
     if (typeof tool.description === 'string' && tool.description.length > 0) lines.push(tool.description);
-    lines.push(`Parameters: ${stableStringify(tool.parameters ?? {})}`);
+    if (includeSchemas) lines.push(`Parameters: ${stableStringify(tool.parameters ?? {})}`);
+    else lines.push(`Parameters: ${describeParameterNames(tool.parameters)}`);
   }
   lines.push('');
   return lines.join('\n');
+}
+
+/** Parameter names only — the cheap form used when `includeSchemas` is off. */
+function describeParameterNames(parameters) {
+  const properties = parameters?.properties;
+  if (properties === null || typeof properties !== 'object') return '(none)';
+  const names = Object.keys(properties);
+  return names.length === 0 ? '(none)' : names.join(', ');
 }
 
 /** Escape one string for literal use inside a RegExp. */
@@ -561,6 +591,11 @@ export async function* createInboundTransform(source, options = {}) {
   /** Set after a call, so one closing code fence is swallowed instead of shown. */
   let skipFence = false;
   let toolSequence = 0;
+  /** Native tool-call blocks that passed through untouched. */
+  let nativeCalls = 0;
+  /** The terminal `finish` chunk, held so a silently empty stop can be corrected. */
+  let pendingFinish = null;
+  const guardEmpty = options.emptyResponseGuard !== false;
 
   const toolChunks = (name, argsJson) => {
     const id = `call_${randomUUID()}`;
@@ -762,8 +797,18 @@ export async function* createInboundTransform(source, options = {}) {
           emittedText = '';
           skipFence = false;
         } else {
+          if (chunk.block?.type === 'tool-call') nativeCalls += 1;
           yield chunk;
         }
+        break;
+      }
+      case 'finish': {
+        // Held: a model that reasons its way to "nothing to say" settles
+        // `completed` with no text and no call, so the user sees an empty
+        // bubble and nothing is retried. Reporting it as EMPTY_RESPONSE (a
+        // code the runtime retries by default) turns a dead turn into an
+        // attempt that gets another chance.
+        pendingFinish = chunk;
         break;
       }
       default:
@@ -780,6 +825,24 @@ export async function* createInboundTransform(source, options = {}) {
   // means this model cannot follow the text protocol.
   if (onSettle !== null) {
     onSettle({ toolCalls: toolSequence, suspicious: toolSequence === 0 && CALL_ATTEMPT.test(visibleText) });
+  }
+
+  if (pendingFinish !== null) {
+    const produced = visibleText.trim().length > 0 || toolSequence > 0 || nativeCalls > 0;
+    if (guardEmpty && !produced && pendingFinish.reason?.kind === 'stop') {
+      yield {
+        type: 'finish',
+        reason: {
+          kind: 'error',
+          failure: {
+            message: 'the model ended the turn without an answer and without a tool call',
+            code: 'EMPTY_RESPONSE'
+          }
+        }
+      };
+      return;
+    }
+    yield pendingFinish;
   }
 }
 
@@ -971,7 +1034,28 @@ export function apply(ctx, config) {
 
         const catalog = renderToolCatalog(tools, options);
         catalogs.set(routeKey(request.provider, request.model), captureTypes(tools));
-        const messages = Array.isArray(request.messages) ? [...request.messages] : [];
+        const source = Array.isArray(request.messages) ? request.messages : [];
+        // An assistant turn with neither visible text nor a tool call carries no
+        // information, and replaying it as an empty assistant message is exactly
+        // the shape that pushes a reasoning model into repeating the empty
+        // answer. Dropping it keeps the prefix shorter and stops the loop.
+        let dropped = 0;
+        const kept = [];
+        for (const message of source) {
+          if (options.dropEmptyTurns && message?.role === 'assistant') {
+            const content = Array.isArray(message.content) ? message.content : [];
+            const hasText = content.some(
+              (block) => block?.type === 'text' && typeof block.text === 'string' && block.text.trim().length > 0
+            );
+            const hasCall = content.some((block) => block?.type === 'tool-call');
+            if (!hasText && !hasCall) {
+              dropped += 1;
+              continue;
+            }
+          }
+          kept.push(message);
+        }
+        const messages = [...kept];
         const first = messages[0];
         if (first !== null && typeof first === 'object' && first.role === 'system') {
           const content = typeof first.content === 'string' ? `${first.content}\n\n${catalog}` : catalog;
@@ -979,7 +1063,7 @@ export function apply(ctx, config) {
         } else {
           messages.unshift({ role: 'system', content: catalog });
         }
-        diag({ hook: 'llm:rewrite', ok: true, tools: tools.length, sessionId: request.sessionId ?? null });
+        diag({ hook: 'llm:rewrite', ok: true, tools: tools.length, dropped, sessionId: request.sessionId ?? null });
         return { ...request, tools: [], messages };
       } catch (error) {
         diag({ hook: 'llm:rewrite', ok: false, reason: String(error) });
@@ -1071,6 +1155,7 @@ export function apply(ctx, config) {
       if (allowed && !isNative(request?.provider, request?.model)) {
         return createInboundTransform(next(), {
           marker: options.marker,
+          emptyResponseGuard: options.emptyResponseGuard,
           argumentTypes: catalogs.get(routeKey(request?.provider, request?.model)),
           onSettle: ({ toolCalls, suspicious }) => {
             if (!options.autoDetect || !suspicious) return;

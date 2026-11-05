@@ -1,5 +1,25 @@
 # Changelog
 
+## 未发版 — 2026-11-05（借鉴 dsh-llm-text-tools：止住空回答 + 前缀瘦身）
+
+对照 `plugins/dsh-llm-text-tools` 的做法补齐三处：
+
+- **空响应守卫 `emptyResponseGuard`（默认开）**：模型只输出 reasoning、既无正文也无
+  工具调用就以 `stop` 结束时，改报可重试的 `EMPTY_RESPONSE`，交给 `dsh-auto-retry`/
+  运行时重试一次，而不是把空回答落盘让界面出现空气泡。这正是"回答总是异常中断"
+  的主要成因之一（`dsh-llm-text-tools` 把这条列为历史上的主 bug）。
+- **丢弃空 assistant 回合 `dropEmptyTurns`（默认开）**：回放 `{role:'assistant',
+  content:''}` 会诱导推理模型继续输出空回答，改成在改写请求时直接不发送这一回合，
+  顺带缩短缓存前缀。
+- **`includeSchemas`（默认开）**：关掉后只在提示词里保留参数名，缓存前缀更短。
+
+协议文本同时强化：显式点名禁止 DeepSeek DSML 标签（`<|DSML| calls>` / `<|DSML| invoke>`）
+与 `<tool_call>`/`<invoke>` 等 XML 形态，并给出可直接照抄的示例行——实测这能减少
+DSML 乱码刷屏。
+
+测试增至 59 项：空响应守卫的 4 种结局（空/正文/工具/native 调用）、守卫开关、
+丢弃空回合及其开关、目录逐字节确定性、`includeSchemas` 前后差异、DSML 禁写与示例行。
+
 ## 未发版 — 2026-11-05（语法扩容 + 自动降级 + 宽容闭合）
 
 实测 n1n 网关下 8 个模型的文本协议遵从度后补齐（`scripts/_proto_probe.mjs`）：

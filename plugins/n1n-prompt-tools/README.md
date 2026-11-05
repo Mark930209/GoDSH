@@ -54,6 +54,9 @@ Host 插件，挂两个水位（waterfall）事件，不需要任何 `@deepseek-
 | `denyModels` | `[]` | 可选黑名单，永远走原生 `tools`；优先级高于 `models` |
 | `autoDetect` | `true` | 回复里出现调用语法却没解析出调用时，自动把该路由降级为原生 `tools` |
 | `parseStrippedRoutes` | `true` | 请求没有 `tools` 字段时仍解析回复，避免漏标记后整轮停住 |
+| `includeSchemas` | `true` | 是否在提示词里附完整 JSON Schema；关掉只留参数名，缓存前缀更短 |
+| `emptyResponseGuard` | `true` | 「无可见正文且无工具调用」的 `stop` 判为可重试的 `EMPTY_RESPONSE` |
+| `dropEmptyTurns` | `true` | 回放时丢弃既无正文也无工具调用的 `assistant` 回合 |
 | `marker` | `'@@TOOL@@'` | 文本调用标记 |
 
 ### n1n 内部的模型差异（2026-11-05 实测）

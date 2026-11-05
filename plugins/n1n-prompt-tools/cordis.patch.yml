@@ -24,4 +24,15 @@
         # 但实际请求走的是别的 provider，仍然解析它的回复，避免"漏出标记然后
         # 整轮停住"。它只把文本转成调用，不会摘任何 provider 的 tools。
         parseStrippedRoutes: true
+        # 是否在提示词里附带每个工具的完整 JSON Schema（默认开）。
+        # 关掉只留参数名，缓存前缀更短、首 token 更快，代价是模型看不到参数类型。
+        includeSchemas: true
+        # 空响应守卫（默认开）：模型只输出 reasoning、没有正文也没有工具调用就结束
+        # （finish 原因是 stop）时，判为可重试的 EMPTY_RESPONSE，交给重试逻辑再来一次，
+        # 而不是把空回答落盘、让界面出现空气泡。这就是"回答异常中断"的主要成因之一。
+        emptyResponseGuard: true
+        # 丢弃"既没有正文也没有工具调用"的 assistant 回合（默认开）。
+        # 这种空回合回放给推理模型时，很容易让它继续输出空回答；丢掉既止住死循环，
+        # 也让缓存前缀更短。
+        dropEmptyTurns: true
         marker: '@@TOOL@@'
