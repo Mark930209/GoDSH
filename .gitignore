@@ -6,6 +6,7 @@ package-lock.json
 
 # 恢复/临时目录（本地私有）
 .recovery/
+.scratch/
 *.local.*
 docs/market-index.local.json
 

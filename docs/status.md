@@ -43,6 +43,19 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 
 ## 已完成（时间线）
 
+- **2026-11-05 · `n1n-prompt-tools` 修复 DSML 落进正文（出站/入站合并为单一权威点）**：
+  真实故障是 `turn 3 step 1` 把 `<｜｜DSML｜｜ invoke …>` 原样写进正文（1393 字符），整轮没
+  执行任何工具。对同一段文本做了 1876 种分片回归（1 字符 / 7 字符 / 逐位置二分 / 三刀网格）
+  **全部解析正确**，证明解析逻辑无罪。诊断日志显示该请求只有 `llm:rewrite`、**没有 `stream`**：
+  出站改写挂在 `streamWithRegistration` 补丁、入站解析挂在 `llm/stream` 监听器，两个独立注入
+  点会脱钩；且补丁恢复失败被 `try/catch` 静默吞掉，插件停用后补丁仍在剥工具（全量 214 次
+  `llm:rewrite` 有 6 次无配对 `stream`，其中 `10:11:50Z` 那次正是 `tools=32` 的主回合）。
+  修法：补丁改写后**自己**包装 `createInboundTransform`（`parseReply` 兼容同步流与 Promise）；
+  `armed` 标志在 `dispose()` 首步置 `false`，让孤儿补丁退化为透传；`parsedByPatch` WeakSet
+  标记已接管请求，监听器见之直接 `next()` 避免二次解析。测试 63 项（新增 3 条回归）。
+  另确认 17 次 `EMPTY_RESPONSE` 重试**不是本插件造出来的**：DSH 适配器本身就把"终止 `stop`
+  且无内容块"判为 `EMPTY_RESPONSE` 并交由默认策略重试，属 n1n/mimo 返回空响应的独立问题。
+
 - **2026-11-05 · `n1n-prompt-tools` 借鉴 `dsh-llm-text-tools`**：对照参考插件补齐
   `emptyResponseGuard`（reasoning-only 的 `stop` 判为可重试 `EMPTY_RESPONSE`）、
   `dropEmptyTurns`（不再回放空 assistant 回合）、`includeSchemas`（可只看参数名前缀），

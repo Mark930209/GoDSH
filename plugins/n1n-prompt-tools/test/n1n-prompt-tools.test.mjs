@@ -40,6 +40,27 @@ async function runTransform(chunks, options = {}) {
   return { out, text, blocks, toolBlocks };
 }
 
+test('the rewritten system message keeps the block-array content shape', () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'] });
+  const request = Object.freeze({
+    provider: 'n1n',
+    model: 'deepseek-v4.1-flash',
+    tools: TOOLS.filter((tool) => tool.deferLoading !== true),
+    messages: [
+      Object.freeze({ role: 'system', content: Object.freeze([Object.freeze({ type: 'text', text: 'base prompt' }), Object.freeze({ type: 'text', text: 'second section' })]) }),
+      Object.freeze({ role: 'user', content: Object.freeze([Object.freeze({ type: 'text', text: 'hi' })]) })
+    ]
+  });
+  ctx.llm.streamWithRegistration(request, undefined);
+  const handed = ctx.llm.calls.at(-1);
+  const content = handed.messages[0].content;
+  assert.ok(Array.isArray(content), 'content must stay a block array; adapters call content.some()');
+  assert.equal(content.length, 3, 'the catalog is appended as one more text block');
+  assert.equal(content[0].text, 'base prompt');
+  assert.ok(content[2].text.includes('@@TOOL@@'));
+});
+
 test('an empty assistant turn is dropped from the replayed history', () => {
   const ctx = fakeCtx();
   apply(ctx, { providers: ['n1n'] });
@@ -56,7 +77,8 @@ test('an empty assistant turn is dropped from the replayed history', () => {
       { role: 'tool', toolCallId: 'c1', content: [{ type: 'text', text: 'done' }] }
     ]
   };
-  const { handed } = ctx.llm.streamWithRegistration(request, undefined);
+  ctx.llm.streamWithRegistration(request, undefined);
+  const handed = ctx.llm.calls.at(-1);
   const roles = handed.messages.map((message) => message.role);
   assert.deepEqual(roles, ['system', 'user', 'assistant', 'assistant', 'tool']);
   assert.equal(handed.messages[2].content[0].text, 'ok', 'the visible answer survives');
@@ -76,7 +98,8 @@ test('dropEmptyTurns can be turned off', () => {
       { role: 'assistant', content: [{ type: 'reasoning', text: 'hmm' }] }
     ]
   };
-  const { handed } = ctx.llm.streamWithRegistration(request, undefined);
+  ctx.llm.streamWithRegistration(request, undefined);
+  const handed = ctx.llm.calls.at(-1);
   assert.equal(handed.messages.length, 2, 'the empty turn is kept when the option is off');
 });
 
@@ -454,7 +477,14 @@ function fakeCtx() {
       calls: [],
       streamWithRegistration(request, prepared) {
         this.calls.push(request);
-        return { handed: request, prepared };
+        prepared;
+        // A real chunk stream: the patch now wraps the reply it rewrote, so the
+        // returned object has to be iterable and has to record what the adapter
+        // was handed.
+        const chunks = Array.isArray(ctx.replyChunks) ? ctx.replyChunks : [];
+        return (async function* () {
+          for (const chunk of chunks) yield chunk;
+        })();
       }
     },
     logger: {
@@ -659,7 +689,8 @@ test('the runtime patch replaces a frozen request before the adapter sees it', (
     sessionId: 's-1'
   });
 
-  const { handed } = ctx.llm.streamWithRegistration(original, undefined);
+  ctx.llm.streamWithRegistration(original, undefined);
+  const handed = ctx.llm.calls.at(-1);
   assert.deepEqual(handed.tools, [], 'the adapter must receive no tools');
   assert.ok(handed.messages[0].content.startsWith('base prompt'));
   assert.ok(handed.messages[0].content.includes('@@TOOL@@'));
@@ -669,11 +700,13 @@ test('the runtime patch replaces a frozen request before the adapter sees it', (
 
   // A route outside the allow-list is handed through untouched.
   const foreign = { provider: 'strata', model: 'm', tools, messages: [] };
-  assert.equal(ctx.llm.streamWithRegistration(foreign, undefined).handed, foreign);
+  ctx.llm.streamWithRegistration(foreign, undefined);
+  assert.equal(ctx.llm.calls.at(-1), foreign);
 
   // No tools: nothing to rewrite.
   const plain = { provider: 'n1n', model: 'deepseek-v4.1-flash', messages: [] };
-  assert.equal(ctx.llm.streamWithRegistration(plain, undefined).handed, plain);
+  ctx.llm.streamWithRegistration(plain, undefined);
+  assert.equal(ctx.llm.calls.at(-1), plain);
 });
 
 test('the stream hook strips tools in place when the outbound half did not', () => {
@@ -693,6 +726,84 @@ test('the stream hook strips tools in place when the outbound half did not', () 
   assert.ok(request.messages[0].content.startsWith('base prompt'), 'the base prompt must be preserved');
   assert.ok(request.messages[0].content.includes('@@TOOL@@'), 'the catalog must be appended to the system message');
   assert.notEqual(streamed, handed, 'the reply must still be parsed');
+});
+
+test('the outbound patch parses the reply it stripped, even with no listener', async () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'] });
+  // Reproduce the failure state observed in a real session: the patch is on the
+  // service but the `llm/stream` listener is gone. The stripped request then had
+  // nobody to parse the reply, and raw DSML reached the transcript while the
+  // turn ended without running anything.
+  ctx.handlers.delete('llm/stream');
+  const reply = '@@TOOL@@ {"name":"read","arguments":{"path":"a.txt"}}';
+  ctx.replyChunks = [
+    { type: 'block-start', index: 0, blockType: 'text' },
+    { type: 'text-delta', index: 0, text: reply },
+    { type: 'block-end', index: 0, block: { type: 'text', text: reply } },
+    { type: 'finish', reason: { kind: 'stop' } }
+  ];
+
+  const chunks = [];
+  const stream = ctx.llm.streamWithRegistration(
+    {
+      provider: 'n1n',
+      model: 'deepseek-v4.1-flash',
+      tools: TOOLS.filter((tool) => tool.deferLoading !== true),
+      messages: [{ role: 'system', content: 'base prompt' }]
+    },
+    undefined
+  );
+  for await (const chunk of stream) chunks.push(chunk);
+
+  const calls = chunks.filter((chunk) => chunk.type === 'block-end' && chunk.block?.type === 'tool-call');
+  assert.equal(calls.length, 1, 'the reply to a stripped request must still yield a tool call');
+  assert.equal(calls[0].block.name, 'read');
+  assert.ok(
+    !chunks.some((chunk) => chunk.type === 'text-delta' && chunk.text.includes('@@TOOL@@')),
+    'no protocol markup may reach the transcript'
+  );
+});
+
+test('a disposed plugin leaves a pass-through patch behind', () => {
+  const ctx = fakeCtx();
+  const dispose = apply(ctx, { providers: ['n1n'] });
+  const build = () => ({
+    provider: 'n1n',
+    model: 'deepseek-v4.1-flash',
+    tools: TOOLS.filter((tool) => tool.deferLoading !== true),
+    messages: [{ role: 'system', content: 'base prompt' }]
+  });
+
+  ctx.llm.streamWithRegistration(build(), undefined);
+  assert.equal(ctx.llm.calls.at(-1).tools.length, 0, 'while armed the tools are stripped');
+
+  // Keep the patch installed past disposal, which is what a failed restore does.
+  const patched = ctx.llm.streamWithRegistration;
+  dispose();
+  ctx.llm.streamWithRegistration = patched;
+
+  const after = build();
+  ctx.llm.streamWithRegistration(after, undefined);
+  assert.equal(ctx.llm.calls.at(-1), after, 'a stale patch must not strip tools it cannot parse back');
+});
+
+test('the stream listener leaves an already-owned request alone', () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'] });
+  ctx.llm.streamWithRegistration(
+    {
+      provider: 'n1n',
+      model: 'deepseek-v4.1-flash',
+      tools: TOOLS.filter((tool) => tool.deferLoading !== true),
+      messages: [{ role: 'system', content: 'base prompt' }]
+    },
+    undefined
+  );
+  const rewritten = ctx.llm.calls.at(-1);
+  const passthrough = { marker: 'adapter' };
+  const stream = ctx.handlers.get('llm/stream');
+  assert.equal(stream(rewritten, () => passthrough), passthrough, 'the patch already owns that reply');
 });
 
 test('the defensive net parses a tools-less route instead of leaking markup', () => {

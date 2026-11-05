@@ -231,6 +231,28 @@ function describeParameterNames(parameters) {
   return names.length === 0 ? '(none)' : names.join(', ');
 }
 
+/** Fast non-cryptographic hash for probe comparisons only. */
+function fnv1a(text) {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < text.length; index += 1) {
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash.toString(16);
+}
+
+/** Text of the leading system messages — the head of the cacheable prefix. */
+function messagePrefixText(messages) {
+  let text = '';
+  for (const message of messages) {
+    if (message?.role !== 'system') break;
+    const content = message.content;
+    if (typeof content === 'string') text += content;
+    else if (Array.isArray(content)) for (const block of content) if (block?.type === 'text') text += block.text ?? '';
+  }
+  return text;
+}
+
 /** Escape one string for literal use inside a RegExp. */
 function escapeRegExp(text) {
   return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -889,6 +911,50 @@ export function apply(ctx, config) {
       return types;
     };
 
+    /**
+     * Requests this plugin stripped and will therefore parse itself. Tracked by
+     * identity: the patch hands the adapter a fresh object, and the `llm/stream`
+     * listener receives that very object, so a WeakSet distinguishes "already
+     * owned" from "somebody else stripped this" without touching the payload.
+     */
+    const parsedByPatch = new WeakSet();
+    /**
+     * Cleared on dispose.
+     *
+     * The `streamWithRegistration` patch outlives this closure whenever the llm
+     * service is already torn down, and it is installed independently of the
+     * `llm/stream` listener that used to own the reply. A patch that keeps
+     * stripping tools while nothing parses the reply is the worst possible
+     * state: the model is handed a text protocol, emits it, and the user sees
+     * raw markup in the answer while the turn ends with no tool call. Disarming
+     * the patch first makes a stale one a pure pass-through.
+     */
+    let armed = true;
+
+    /** Inbound parser options for one route. */
+    const inboundFor = (provider, model) => ({
+      marker: options.marker,
+      emptyResponseGuard: options.emptyResponseGuard,
+      argumentTypes: catalogs.get(routeKey(provider, model)),
+      onSettle: ({ toolCalls, suspicious }) => {
+        if (!options.autoDetect || !suspicious) return;
+        downgraded.set(routeKey(provider, model), 'native');
+        note(
+          'warn',
+          `${model} showed tool-call syntax but produced ${toolCalls} call(s); falling back to native tools for this route`
+        );
+      }
+    });
+
+    /** Wrap a reply, resolving it first if the waterfall answered asynchronously. */
+    const parseReply = (stream, request) => {
+      const inbound = inboundFor(request?.provider, request?.model);
+      if (stream !== null && typeof stream === 'object' && typeof stream.then === 'function') {
+        return stream.then((resolved) => createInboundTransform(resolved, inbound));
+      }
+      return createInboundTransform(stream, inbound);
+    };
+
     const makeAssemblePrompt = (via) => async (assembly, context, next) => {
       const assembled = await next();
       diag({
@@ -1057,14 +1123,33 @@ export function apply(ctx, config) {
         }
         const messages = [...kept];
         const first = messages[0];
+        // Harness messages speak `{role, content: ContentBlock[]}`. Appending a
+        // text block keeps that shape; replacing array content with a plain
+        // string breaks every adapter helper that calls `content.some(...)`.
         if (first !== null && typeof first === 'object' && first.role === 'system') {
-          const content = typeof first.content === 'string' ? `${first.content}\n\n${catalog}` : catalog;
-          messages[0] = { ...first, content };
+          if (Array.isArray(first.content)) {
+            messages[0] = { ...first, content: [...first.content, { type: 'text', text: catalog }] };
+          } else if (typeof first.content === 'string') {
+            messages[0] = { ...first, content: `${first.content}\n\n${catalog}` };
+          } else {
+            messages[0] = { ...first, content: [{ type: 'text', text: catalog }] };
+          }
         } else {
-          messages.unshift({ role: 'system', content: catalog });
+          messages.unshift({ role: 'system', content: [{ type: 'text', text: catalog }] });
         }
-        diag({ hook: 'llm:rewrite', ok: true, tools: tools.length, dropped, sessionId: request.sessionId ?? null });
-        return { ...request, tools: [], messages };
+        diag({
+          hook: 'llm:rewrite',
+          ok: true,
+          tools: tools.length,
+          dropped,
+          catHash: fnv1a(catalog),
+          catLen: catalog.length,
+          prefixHash: fnv1a(messagePrefixText(messages)),
+          sessionId: request.sessionId ?? null
+        });
+        const rewritten = { ...request, tools: [], messages };
+        parsedByPatch.add(rewritten);
+        return rewritten;
       } catch (error) {
         diag({ hook: 'llm:rewrite', ok: false, reason: String(error) });
         return request;
@@ -1081,7 +1166,16 @@ export function apply(ctx, config) {
           return;
         }
         const patched = function patchedStreamWithRegistration(request, prepared) {
-          return original.call(this, rewriteOutbound(request), prepared);
+          // A stale patch (service already gone, plugin disabled) must not strip
+          // tools it cannot parse back.
+          if (!armed) return original.call(this, request, prepared);
+          const rewritten = rewriteOutbound(request);
+          const stream = original.call(this, rewritten, prepared);
+          // One authority for both halves. Installing the parser from a separate
+          // `llm/stream` listener lets the two drift apart, and a stripped
+          // request whose reply is never parsed is exactly how raw protocol
+          // markup ends up in the transcript.
+          return rewritten === request ? stream : parseReply(stream, rewritten);
         };
         service.streamWithRegistration = patched;
         restoreStreamWithRegistration = () => {
@@ -1117,6 +1211,9 @@ export function apply(ctx, config) {
         frozen: request !== null && typeof request === 'object' ? Object.isFrozen(request) : null,
         messageCount: Array.isArray(request?.messages) ? request.messages.length : -1
       });
+      // The patch that stripped this request also parses its reply, so wrapping
+      // here would run the same stream through the parser twice.
+      if (parsedByPatch.has(request)) return next();
       if (toolsPresent && !(allowed && !isNative(request?.provider, request?.model))) return next();
       if (toolsPresent) {
         // Belt and braces: if the outbound half did not strip the tools (its
@@ -1183,13 +1280,18 @@ export function apply(ctx, config) {
     note('info', `active for: ${scope}${options.autoDetect ? ' (auto-detect on)' : ''}`);
 
     return () => {
+      // Disarm before unwinding: see `armed`. This must happen even if every
+      // other step below throws, so it goes first and outside the try blocks.
+      armed = false;
       disposeRootAssemble();
       disposeCreated();
       disposeDisposed();
       try {
         restoreStreamWithRegistration?.();
-      } catch {
-        // The runtime may already be gone.
+      } catch (error) {
+        // The runtime may already be gone. `armed` is already false, so the
+        // patch left behind is a pass-through rather than a half-active one.
+        diag({ hook: 'llm:unpatch', ok: false, reason: String(error) });
       }
       for (const dispose of attached.values()) {
         try {
