@@ -34,6 +34,12 @@ import { join } from 'node:path';
 export const name = 'n1n-prompt-tools';
 
 /**
+ * The prompt-assembly waterfall is dispatched on each Agent's scoped context,
+ * so the outbound half needs the agent registry to reach it.
+ */
+export const inject = ['agents'];
+
+/**
  * TEMPORARY runtime probe. Writes one JSON line per hook call so the route
  * resolution can be inspected against the live harness. Removed once the gate
  * is confirmed on real traffic.
@@ -808,7 +814,7 @@ export function apply(ctx, config) {
     /** Whether this route must keep native tool calling. */
     const isNative = (provider, model) => downgraded.get(routeKey(provider, model)) === 'native';
 
-    const disposeAssemble = ctx.on('system-prompt/assemble', async (assembly, context, next) => {
+    const assemblePrompt = async (assembly, context, next) => {
       const assembled = await next();
       diag({
         hook: 'assemble:entered',
@@ -883,7 +889,49 @@ export function apply(ctx, config) {
         tools: [],
         sections: [...assembled.sections, { name: CATALOG_SECTION, text: catalog, interpolate: false }]
       };
-    });
+    };
+
+    // `system-prompt/assemble` is dispatched through `scopeTarget(this, scope)`,
+    // so a listener on the app root never sees it — it has to be registered on
+    // each Agent's own scoped context, exactly like `installModelSelection`
+    // does. The root listener stays as a harmless fallback for a harness that
+    // ever dispatches this event globally; the `tools.length === 0` guard makes
+    // double application impossible.
+    const disposeRootAssemble = ctx.on('system-prompt/assemble', assemblePrompt);
+    /** Scoped assemble disposers, keyed by agent id. */
+    const attached = new Map();
+    const attach = (agent) => {
+      try {
+        if (agent === null || typeof agent !== 'object') return;
+        const id = agent.id;
+        if (id === undefined || attached.has(id)) return;
+        const agentCtx = agent.ctx;
+        if (agentCtx === null || typeof agentCtx !== 'object' || typeof agentCtx.on !== 'function') return;
+        const dispose = agentCtx.on('system-prompt/assemble', assemblePrompt);
+        attached.set(id, typeof dispose === 'function' ? dispose : () => {});
+      } catch {
+        // An agent we cannot scope simply keeps native tools.
+      }
+    };
+    const detach = (agent) => {
+      const id = agent?.id;
+      if (id === undefined) return;
+      const dispose = attached.get(id);
+      attached.delete(id);
+      try {
+        dispose?.();
+      } catch {
+        // Disposal must never throw into the registry.
+      }
+    };
+    const disposeCreated = ctx.on('agent/created', ({ agent }) => attach(agent));
+    const disposeDisposed = ctx.on('agent/disposed', ({ agent }) => detach(agent));
+    try {
+      for (const agent of ctx.agents.list()) attach(agent);
+    } catch {
+      // No registry available: the root listener above is all we get.
+    }
+    diag({ hook: 'agents:attached', count: attached.size });
 
     const disposeStream = ctx.on('llm/stream', (request, next) => {
       // The request carries the frozen route, so this is the authoritative gate.
@@ -928,7 +976,17 @@ export function apply(ctx, config) {
     note('info', `active for: ${scope}${options.autoDetect ? ' (auto-detect on)' : ''}`);
 
     return () => {
-      disposeAssemble();
+      disposeRootAssemble();
+      disposeCreated();
+      disposeDisposed();
+      for (const dispose of attached.values()) {
+        try {
+          dispose();
+        } catch {
+          // Ignore a listener already torn down with its agent.
+        }
+      }
+      attached.clear();
       disposeStream();
     };
   }, 'n1n-prompt-tools');

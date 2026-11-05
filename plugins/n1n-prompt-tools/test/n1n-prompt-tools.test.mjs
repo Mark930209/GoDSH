@@ -338,6 +338,79 @@ function fakeCtx() {
   };
 }
 
+/**
+ * A fake that models the real dispatch: `system-prompt/assemble` only reaches
+ * listeners registered on an Agent's own scoped context.
+ */
+function scopedFakeCtx() {
+  const agentHandlers = new Map();
+  const agents = [];
+  const ctx = {
+    agentHandlers,
+    notes: [],
+    agents: {
+      list: () => [...agents]
+    },
+    logger: {
+      info: (line) => ctx.notes.push(['info', line]),
+      warn: (line) => ctx.notes.push(['warn', line]),
+      error: (line) => ctx.notes.push(['error', line])
+    },
+    on(event, handler) {
+      if (event === 'agent/created') {
+        ctx.created = handler;
+        return () => {};
+      }
+      return () => {};
+    },
+    effect(fn) {
+      return fn();
+    }
+  };
+  const makeAgent = (id) => {
+    const handlers = new Map();
+    const agent = {
+      id,
+      session: { requestHeader: () => ({ config: { provider: 'n1n', model: 'deepseek-v4.1-flash' } }) },
+      ctx: {
+        on(event, handler) {
+          handlers.set(event, handler);
+          return () => handlers.delete(event);
+        }
+      }
+    };
+    agent.handlers = handlers;
+    agents.push(agent);
+    return agent;
+  };
+  return { ctx, makeAgent, agents };
+}
+
+test('assemble is registered on each agent scoped context, not only the root', async () => {
+  const { ctx, makeAgent } = scopedFakeCtx();
+  apply(ctx, { providers: ['n1n'] });
+
+  const existing = makeAgent('agent-1');
+  apply(ctx, { providers: ['n1n'] }); // re-apply picks up live agents through agents.list()
+  const handler = existing.handlers.get('system-prompt/assemble');
+  assert.ok(handler, 'a live agent must get a scoped assemble listener');
+
+  const assembly = {
+    sections: [{ name: 'base', text: 'you are a helpful agent', interpolate: false }],
+    tools: TOOLS.filter((tool) => tool.deferLoading !== true),
+    contexts: []
+  };
+  const out = await handler(assembly, { agent: existing }, async () => assembly);
+  assert.deepEqual(out.tools, [], 'the scoped listener must strip native tools');
+  assert.ok(out.sections.some((section) => section.name === 'plugin:n1n-prompt-tools:catalog'));
+
+  // A newly created agent gets one too.
+  const fresh = makeAgent('agent-2');
+  ctx.created({ agent: fresh });
+  assert.ok(fresh.handlers.get('system-prompt/assemble'), 'agent/created must attach a listener');
+});
+
+
 function assemblyFor(provider, model) {
   return {
     sections: [{ name: 'base', text: 'you are a helpful agent', interpolate: false }],
