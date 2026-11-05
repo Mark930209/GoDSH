@@ -810,6 +810,11 @@ export function apply(ctx, config) {
 
     const disposeAssemble = ctx.on('system-prompt/assemble', async (assembly, context, next) => {
       const assembled = await next();
+      diag({
+        hook: 'assemble:entered',
+        raw: assembly === undefined ? 'undefined' : Array.isArray(assembly?.sections) ? 'assembly' : typeof assembly,
+        after: assembled === null || typeof assembled !== 'object' ? String(assembled) : Array.isArray(assembled.sections) ? 'assembly' : typeof assembled
+      });
       if (assembled === null || typeof assembled !== 'object') return assembled;
       // `installModelSelection` publishes the selected route as prompt
       // variables — but only after the user has explicitly picked a model.
