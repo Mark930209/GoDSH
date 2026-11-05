@@ -28,7 +28,34 @@
  */
 import { randomUUID } from 'node:crypto';
 
+import { appendFileSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+
 export const name = 'n1n-prompt-tools';
+
+/**
+ * TEMPORARY runtime probe. Writes one JSON line per hook call so the route
+ * resolution can be inspected against the live harness. Removed once the gate
+ * is confirmed on real traffic.
+ */
+const DIAG_FILE = (() => {
+  try {
+    return join(process.env.TEMP || process.env.TMP || '.', 'n1n-diag.jsonl');
+  } catch {
+    return null;
+  }
+})();
+
+function diag(record) {
+  if (DIAG_FILE === null) return;
+  try {
+    const size = statSync(DIAG_FILE, { throwIfNoEntry: false })?.size ?? 0;
+    if (size > 2_000_000) return;
+    appendFileSync(DIAG_FILE, `${JSON.stringify({ t: new Date().toISOString(), ...record })}\n`, 'utf8');
+  } catch {
+    // Diagnostics must never break a model request.
+  }
+}
 
 /** Section appended to the assembled system prompt. */
 const CATALOG_SECTION = 'plugin:n1n-prompt-tools:catalog';
@@ -774,6 +801,7 @@ export function apply(ctx, config) {
      * removes itself from a route it has watched fail.
      */
     const downgraded = new Map();
+    diag({ hook: 'apply', options, diagFile: DIAG_FILE });
     /** Parameter schema types per route, captured at assemble time for coercion. */
     const catalogs = new Map();
     const routeKey = (provider, model) => `${provider ?? ''}::${model ?? ''}`;
@@ -796,7 +824,31 @@ export function apply(ctx, config) {
       }
       const provider = assembled.variables?.provider ?? header?.provider ?? context?.agent?.options?.provider;
       const model = assembled.variables?.model ?? header?.model ?? context?.agent?.options?.model;
-      if (!routeAllowed(options, provider, model)) return assembled;
+      const allowed = routeAllowed(options, provider, model);
+      if (!allowed) {
+        let agentKeys = null;
+        let sessionKeys = null;
+        try {
+          agentKeys = context?.agent ? Object.keys(context.agent) : null;
+          sessionKeys = context?.agent?.session ? Object.keys(context.agent.session) : null;
+        } catch {
+          agentKeys = 'unreadable';
+        }
+        diag({
+          hook: 'assemble',
+          variables: assembled.variables ?? null,
+          header: header ?? null,
+          optionsProvider: context?.agent?.options?.provider ?? null,
+          optionsKeys: context?.agent?.options ? Object.keys(context.agent.options) : null,
+          contextKeys: context ? Object.keys(context) : null,
+          agentKeys,
+          sessionKeys,
+          provider: provider ?? null,
+          model: model ?? null,
+          toolCount: Array.isArray(assembled.tools) ? assembled.tools.length : -1
+        });
+      }
+      if (!allowed) return assembled;
       if (isNative(provider, model)) return assembled;
       const tools = Array.isArray(assembled.tools) ? assembled.tools : [];
       if (tools.length === 0) return assembled;
@@ -832,6 +884,14 @@ export function apply(ctx, config) {
       // The request carries the frozen route, so this is the authoritative gate.
       const allowed = routeAllowed(options, request?.provider, request?.model);
       const toolsPresent = Array.isArray(request?.tools) && request.tools.length > 0;
+      diag({
+        hook: 'stream',
+        provider: request?.provider ?? null,
+        model: request?.model ?? null,
+        tools: Array.isArray(request?.tools) ? request.tools.length : request?.tools === undefined ? 'absent' : 'other',
+        allowed,
+        downgraded: isNative(request?.provider, request?.model)
+      });
       if (toolsPresent) return next();
       if (allowed && !isNative(request?.provider, request?.model)) {
         return createInboundTransform(next(), {
