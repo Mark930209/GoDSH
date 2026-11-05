@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Prompt Tool Protocol (Cache Fix)",
+    "description": "Moves the tool catalog into the cacheable system prompt and drops the native tools field, then parses @@TOOL@@ text calls back into standard tool-call blocks to stabilise prefix-cache hits on OpenAI-compatible gateways."
+  }
+}

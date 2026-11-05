@@ -17,6 +17,7 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 | `plugins/auto-retry` | `dsh-auto-retry` | 1.0.1 | `auto-retry-v1.0.1`（`fb77d67`） | link，active |
 | `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | 1.0.1 | `composer-skill-picker-v1.0.1`（`e30c3b2`） | link，active |
 | `plugins/file-tree-context-menu` | `dsh-file-tree-context-menu` | 1.0.1 | `file-tree-context-menu-v1.0.1`（`2d3e8e1`） | link，active |
+| `plugins/prompt-tools` | `dsh-prompt-tools` | 1.0.0 | 未发版（本地 1.0.0） | link，待安装验证 |
 
 - 公共 npm：`latest` 均为 `1.0.1`，已实测 `npm i` 三个包可装在干净目录。
   npm 包页同时残留一个 `0.0.0-stage` 占位版本（staged publishing 产物，见
@@ -72,6 +73,13 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
   本机 profile 依赖键同步换名。
 - **2026-11-04 · 仓库梳理**：安装方法抽成 [install.md](install.md)，交接文档并入本页，
   `CONTRIBUTING.md` 迁入 `docs/contributing.md`，`AGENTS.md` 转为本地私有（进 `.gitignore`）。
+- **2026-11-05 · `prompt-tools` 1.0.0（新增，本地未发版）**：解决 native `tools` 字段吃掉
+  前缀缓存的问题。出站 `system-prompt/assemble` 把工具清单确定性渲染进系统提示词并清空
+  `assembly.tools`；入站 `llm/stream` 把模型输出的 `@@TOOL@@` 文本调用解析回标准 `tool-call`
+  块（marker/JSON 跨 chunk、字符串转义、代码围栏、多调用、扁平参数容错）。按 provider 白名单
+  （默认 `['n1n']`）生效。15 项单元测试；`deepseek-v4.1-flash` 实测协议可被正确解析。
+  注：受控 A/B 显示 `tools` 字段并非真实长会话缓存塌陷的唯一/主要成因（更像网关多后端随机
+  未命中），插件保证“连续确定性文本前缀”这一前提，详见插件 README 的实测结论。
 
 ## 待办
 
@@ -82,8 +90,11 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
      整轮失败则应看到 `[auto-retry] ... resume 1/5 scheduling in ...ms` 且约 5s 后自动续跑；
      用户抢话应取消待续跑；点停止不应续跑。
 2. `docs/publishing.md` 记录的两个 npm 账号坑若再遇到，按文档处理（2FA token / `0.0.0-stage` 占位）。
-3. 可选：在 npmjs.com 用 2FA 手动删掉三个包的 `0.0.0-stage` 占位版本，让包页干净。
-4. 计划新插件：`node scripts\new-plugin.mjs dsh-xxx`。
+3. **`prompt-tools` 冒烟**：装到 desktop profile 后，在 n1n 的会话里让模型做一次工具调用
+   （如读取文件），确认：工具真的执行、UI 正常显示、会话记录里 assistant 是 `tool-call` 块；
+   再观察多步 `cache_read` 是否随上下文增长。若模型不遵循文本协议则把该 provider 从 `providers` 移除。
+4. 可选：在 npmjs.com 用 2FA 手动删掉三个包的 `0.0.0-stage` 占位版本，让包页干净。
+5. 计划新插件：`node scripts\new-plugin.mjs dsh-xxx`。
 
 ## 恢复记录（2026-11-03 误删事故）
 

@@ -1,0 +1,192 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import { renderToolCatalog, stableStringify, extractToolCall, createInboundTransform } from '../index.js';
+
+const TOOLS = [
+  {
+    name: 'bash',
+    description: 'Run a shell command.',
+    parameters: { type: 'object', properties: { cmd: { type: 'string' } }, required: ['cmd'] }
+  },
+  {
+    name: 'read',
+    description: 'Read a file.',
+    parameters: { type: 'object', properties: { path: { type: 'string' } }, required: ['path'] }
+  },
+  {
+    name: 'deferred_tool',
+    description: 'Should be omitted.',
+    deferLoading: true,
+    parameters: { type: 'object' }
+  }
+];
+
+function blockStart(index, blockType) {
+  return { type: 'block-start', index, blockType };
+}
+
+async function runTransform(chunks, options = {}) {
+  const source = (async function* () {
+    for (const chunk of chunks) yield chunk;
+  })();
+  const out = [];
+  for await (const chunk of createInboundTransform(source, options)) out.push(chunk);
+  const text = out
+    .filter((chunk) => chunk.type === 'text-delta')
+    .map((chunk) => chunk.text)
+    .join('');
+  const blocks = out.filter((chunk) => chunk.type === 'block-end').map((chunk) => chunk.block);
+  const toolBlocks = blocks.filter((block) => block.type === 'tool-call');
+  return { out, text, blocks, toolBlocks };
+}
+
+test('stableStringify sorts keys recursively', () => {
+  assert.equal(stableStringify({ b: 1, a: { d: 2, c: 3 } }), '{"a":{"c":3,"d":2},"b":1}');
+});
+
+test('renderToolCatalog is deterministic, name-sorted and skips deferred tools', () => {
+  const first = renderToolCatalog(TOOLS, { marker: '@@TOOL@@' });
+  const second = renderToolCatalog([...TOOLS].reverse(), { marker: '@@TOOL@@' });
+  assert.equal(first, second, 'order of the input must not change the text');
+  assert.ok(first.includes('@@TOOL@@'));
+  assert.ok(first.indexOf('## bash') < first.indexOf('## read'));
+  assert.ok(!first.includes('deferred_tool'));
+  assert.ok(first.includes('Parameters: {"properties":{"cmd":{"type":"string"}},"required":["cmd"],"type":"object"}'));
+});
+
+test('extractToolCall reassembles a schema with braces inside a string', () => {
+  const parsed = extractToolCall(' {"name":"read","arguments":{"path":"a}b{c.txt"}}rest');
+  assert.equal(parsed.state, 'ok');
+  assert.equal(parsed.name, 'read');
+  assert.equal(parsed.argsJson, '{"path":"a}b{c.txt"}');
+  assert.equal(parsed.consumed, ' {"name":"read","arguments":{"path":"a}b{c.txt"}}'.length);
+});
+
+test('extractToolCall reports need for an incomplete object', () => {
+  assert.equal(extractToolCall(' {"name":"read","arguments":{"path":"a').state, 'need');
+});
+
+test('extractToolCall tolerates flattened arguments next to name', () => {
+  const parsed = extractToolCall('{"name":"read","file_path":"a.txt"}');
+  assert.equal(parsed.state, 'ok');
+  assert.equal(parsed.name, 'read');
+  assert.deepEqual(JSON.parse(parsed.argsJson), { file_path: 'a.txt' });
+});
+
+test('extractToolCall merges inline extras with nested arguments', () => {
+  const parsed = extractToolCall('{"name":"read","file_path":"a.txt","arguments":{"offset":2}}');
+  assert.deepEqual(JSON.parse(parsed.argsJson), { file_path: 'a.txt', offset: 2 });
+});
+
+test('whitespace before a call is not emitted as visible text', async () => {
+  const { text, toolBlocks } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: '\n\n@@TOOL@@ {"name":"read","file_path":"a.txt"}' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'raw' } }
+  ]);
+  assert.equal(toolBlocks.length, 1);
+  assert.deepEqual(JSON.parse(toolBlocks[0].arguments), { file_path: 'a.txt' });
+  assert.equal(text, '');
+});
+
+test('plain text passes through unchanged', async () => {
+  const { text, toolBlocks, blocks } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: 'Just an answer' },
+    { type: 'text-delta', index: 0, text: ' with no calls.' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'ignored raw body' } }
+  ]);
+  assert.equal(text, 'Just an answer with no calls.');
+  assert.equal(toolBlocks.length, 0);
+  assert.equal(blocks[0].text, 'Just an answer with no calls.');
+});
+
+test('marker and JSON split across many chunks are reassembled', async () => {
+  const { text, toolBlocks, blocks } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: 'Hello @@T' },
+    { type: 'text-delta', index: 0, text: 'OOL@' },
+    { type: 'text-delta', index: 0, text: '@ {"name":"read","argum' },
+    { type: 'text-delta', index: 0, text: 'ents":{"path":"a.txt"}} bye' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'raw' } }
+  ]);
+  assert.equal(toolBlocks.length, 1);
+  assert.equal(toolBlocks[0].name, 'read');
+  assert.equal(toolBlocks[0].arguments, '{"path":"a.txt"}');
+  assert.equal(text, 'Hello  bye');
+  assert.equal(blocks.find((block) => block.type === 'text').text, 'Hello  bye');
+});
+
+test('escaped quotes and newlines inside arguments survive', async () => {
+  const { toolBlocks } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: '@@TOOL@@ {"name":"bash","arguments":{"cmd":"echo \\"hi\\"\\nls"}}' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'raw' } }
+  ]);
+  assert.equal(toolBlocks.length, 1);
+  assert.deepEqual(JSON.parse(toolBlocks[0].arguments), { cmd: 'echo "hi"\nls' });
+});
+
+test('a code-fenced call leaves no fence text behind', async () => {
+  const { text, toolBlocks } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: 'Sure:\n```json\n' },
+    { type: 'text-delta', index: 0, text: '@@TOOL@@ {"name":"read","arguments":{"path":"a.txt"}}\n' },
+    { type: 'text-delta', index: 0, text: '```' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'raw' } }
+  ]);
+  assert.equal(toolBlocks.length, 1);
+  assert.equal(text, 'Sure:\n');
+});
+
+test('two calls on separate lines both parse', async () => {
+  const { toolBlocks, text } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: '@@TOOL@@ {"name":"read","arguments":{"path":"a"}}\n@@TOOL@@ {"name":"bash","arguments":{"cmd":"ls"}}' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'raw' } }
+  ]);
+  assert.deepEqual(toolBlocks.map((block) => block.name), ['read', 'bash']);
+  assert.equal(text, '');
+});
+
+test('reasoning passes through and an empty text block is dropped', async () => {
+  const { out, toolBlocks, blocks } = await runTransform([
+    blockStart(0, 'reasoning'),
+    { type: 'reasoning-delta', index: 0, text: 'thinking' },
+    { type: 'block-end', index: 0, block: { type: 'reasoning', text: 'thinking' } },
+    blockStart(1, 'text'),
+    { type: 'text-delta', index: 1, text: '@@TOOL@@ {"name":"read","arguments":{"path":"a"}}' },
+    { type: 'block-end', index: 1, block: { type: 'text', text: 'raw' } },
+    { type: 'usage', usage: { inputTokens: 1, outputTokens: 1, totalTokens: 2 } },
+    { type: 'finish', reason: { kind: 'stop' } }
+  ]);
+  assert.equal(toolBlocks.length, 1);
+  assert.ok(out.some((chunk) => chunk.type === 'reasoning-delta'));
+  assert.ok(out.some((chunk) => chunk.type === 'usage'));
+  assert.ok(out.some((chunk) => chunk.type === 'finish'));
+  assert.ok(!blocks.some((block) => block.type === 'text'), 'no empty text block should be emitted');
+  assert.equal(blocks.filter((block) => block.type === 'reasoning').length, 1);
+});
+
+test('an incomplete call at end of stream is kept as literal text', async () => {
+  const { text, toolBlocks } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: '@@TOOL@@ {"name":"read","argum' },
+    { type: 'block-end', index: 0, block: { type: 'text', text: 'raw' } }
+  ]);
+  assert.equal(toolBlocks.length, 0);
+  assert.equal(text, '@@TOOL@@ {"name":"read","argum');
+});
+
+test('custom marker is honoured', async () => {
+  const { toolBlocks } = await runTransform(
+    [
+      blockStart(0, 'text'),
+      { type: 'text-delta', index: 0, text: '<<CALL>> {"name":"read","arguments":{"path":"a"}}' },
+      { type: 'block-end', index: 0, block: { type: 'text', text: 'raw' } }
+    ],
+    { marker: '<<CALL>>' }
+  );
+  assert.equal(toolBlocks.length, 1);
+  assert.equal(toolBlocks[0].name, 'read');
+});

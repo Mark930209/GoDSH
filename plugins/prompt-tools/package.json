@@ -1,0 +1,44 @@
+{
+  "name": "dsh-prompt-tools",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Moves the tool catalog into the cached system prompt and removes the native tools field, then parses @@TOOL@@ text calls back into harness tool-call blocks, to keep prefix-cache hits stable on OpenAI-compatible gateways.",
+  "author": "Mark930209 <guimaxingtian@163.com>",
+  "license": "MIT",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "plugin",
+    "bundle",
+    "prompt-cache",
+    "tool-calling",
+    "openai-compatible",
+    "prefix-cache"
+  ],
+  "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/prompt-tools",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Mark930209/GoDSH.git",
+    "directory": "plugins/prompt-tools"
+  },
+  "scripts": {
+    "check": "node --check index.js",
+    "test": "node --test test/"
+  },
+  "exports": {
+    ".": "./index.js",
+    "./locale/*.json": "./locale/*.json",
+    "./icon": "./icon.svg"
+  },
+  "files": [
+    "index.js",
+    "cordis.patch.yml",
+    "locale/*.json",
+    "icon.svg"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}
