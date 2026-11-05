@@ -50,20 +50,31 @@ Host 插件，挂两个水位（waterfall）事件，不需要任何 `@deepseek-
 |---|---|---|
 | `enabled` | `true` | 总开关 |
 | `providers` | `['n1n']` | 只会保留 `'n1n'`；写其它值会被丢弃。空数组 = 完全不生效 |
-| `models` | `[]` | 可选，按模型收窄；空数组 = n1n 下所有模型 |
+| `models` | `[]` | 可选白名单，按模型收窄；空数组 = n1n 下所有模型 |
+| `denyModels` | `[]` | 可选黑名单，永远走原生 `tools`；优先级高于 `models` |
+| `autoDetect` | `true` | 回复里出现调用语法却没解析出调用时，自动把该路由降级为原生 `tools` |
+| `parseStrippedRoutes` | `true` | 请求没有 `tools` 字段时仍解析回复，避免漏标记后整轮停住 |
 | `marker` | `'@@TOOL@@'` | 文本调用标记 |
 
-### n1n 内部的模型差异
+### n1n 内部的模型差异（2026-11-05 实测）
 
-n1n 网关下挂了多个模型，`models: []`（默认）表示全部适用，但**并非所有 n1n 模型都遵循文本协议**：
+用真实请求（工具清单在系统提示词里、请求不带 `tools`）逐个验证：
 
-| 模型 | 文本协议实测 |
-|---|---|
-| `deepseek-v4.1-flash` | 可用（`@@TOOL@@` 与 XML invoke 都出现过，均已支持） |
-| `kimi-k3.1-pro` | 可用 |
-| `glm-5.3` | **不可用**，会回"我没有 read 工具"直接放弃 |
+| 模型 | 实测输出 | 文本协议 |
+|---|---|---|
+| `deepseek-v4.1-flash` | `@@TOOL@@ {…}` | 可用 |
+| `glm-5.3-flash` | `@@TOOL@@ {…}` | 可用 |
+| `kimi-k3.1-pro` | `@@TOOL@@ {…}` | 可用 |
+| `qwen3.8-flash` | `@@TOOL@@ {…}` | 可用 |
+| `mimo-v2.6-flash` | `@@TOOL@@ {…}` | 可用 |
+| `qwen3.8-max-0902` | `<tool_call>{"name":…}</tool_call>` | 可用（靠 `<tool_call>` 解析器） |
+| `mimo-v2.6-pro` | `<tool_call><function=…><parameter=…>` | 可用（同上） |
+| `glm-5.3` | 残缺 `<tool_call>read file_path="…"</arg_value>` | 不可用，自动降级 |
+| `kimi-k3` | 空内容 | 不可用 |
 
-如果要用 `glm-5.3` 或其它未验证模型，请显式收窄，避免工具调用静默失效：
+注意"是否支持图像输入"与"是否遵循文本协议"**没有相关性**：`qwen3.8-max-0902`
+支持图像却不认文本协议，而纯文本的 `glm-5.3-flash` 反而认。所以默认不要按模态配白名单，
+交给 `autoDetect` 自动判断；确实要钉住时再显式收窄：
 
 ```yaml
 config:

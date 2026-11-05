@@ -43,6 +43,21 @@ const TRAILING_FENCE = /(```[A-Za-z0-9_+-]*[ \t]*\n?|`{1,2})$/;
 const CALLS_OPEN = /^<([^<>\s]+)\s+calls\s*>/;
 const CALLS_CLOSE = /^<\/([^<>\s]+)\s+calls\s*>/;
 const INVOKE_OPEN = /^<([^<>\s]+)\s+invoke\s+name\s*=\s*"([^"]*)"\s*>/;
+
+/**
+ * The `<tool_call>` dialect used by the qwen/mimo family. Two bodies occur:
+ *   `<tool_call>{"name":"read","arguments":{…}}</tool_call>`            (qwen3.8-max)
+ *   `<tool_call><function=read><parameter=file_path>a</parameter>…`     (mimo, next-iq3)
+ */
+const TOOL_CALL_OPEN = /^<tool_call\s*>/;
+const TOOL_CALL_CLOSE = '</tool_call>';
+const FUNCTION_OPEN = /^<function\s*=\s*([^>\s]+)\s*>/;
+const PARAMETER_OPEN = /^<parameter\s*=\s*([^>\s]+)\s*>/;
+const PARAMETER_CLOSE = '</parameter>';
+const FUNCTION_CLOSE = '</function>';
+
+/** Anything that looks like an attempt to call a tool, used by auto-detection. */
+const CALL_ATTEMPT = /(@@TOOL@@|<tool_call|<function\s*=|DSML)/;
 /** Any single tag, used to find the earliest opener inside prose. */
 const ANY_TAG = /<[^<>]{1,120}>/g;
 
@@ -73,8 +88,16 @@ export function resolveOptions(config) {
     // Anything other than n1n is dropped here, so a stale config row cannot
     // widen the plugin onto another vendor.
     providers: list('providers', [N1N_PROVIDER]).filter((value) => value === N1N_PROVIDER),
-    // Optional narrowing inside n1n; empty means every n1n model.
+    // Optional allow-list inside n1n; empty means every n1n model.
     models: list('models', []),
+    // Optional deny-list inside n1n; always wins over `models`.
+    denyModels: list('denyModels', []),
+    // When a model visibly fails the text protocol, fall back to native tools
+    // for the rest of the process instead of showing raw markup.
+    autoDetect: bool('autoDetect', true),
+    // Never leave a tools-less reply unparsed: if some other layer removed the
+    // tools, still convert its markup into real calls rather than dead text.
+    parseStrippedRoutes: bool('parseStrippedRoutes', true),
     marker: text('marker', '@@TOOL@@')
   };
 }
@@ -88,6 +111,7 @@ export function resolveOptions(config) {
 export function routeAllowed(options, provider, model) {
   if (typeof provider !== 'string' || provider !== N1N_PROVIDER) return false;
   if (!options.providers.includes(provider)) return false;
+  if (typeof model === 'string' && options.denyModels?.includes(model) === true) return false;
   if (options.models.length === 0) return true;
   return typeof model === 'string' && options.models.includes(model);
 }
@@ -191,6 +215,7 @@ function holdLen(buffer, marker) {
 
 /** Whether `text` begins with a tag this transform treats as tool-call framing. */
 function startsWithToolTag(text) {
+  if (TOOL_CALL_OPEN.test(text)) return true;
   for (const pattern of [CALLS_OPEN, CALLS_CLOSE, INVOKE_OPEN]) {
     const match = pattern.exec(text);
     if (match !== null && tagPrefixOk(match[1])) return true;
@@ -291,6 +316,28 @@ export function extractToolCall(input) {
   return { state: 'ok', name: parsed.name, argsJson, consumed: end + 1 };
 }
 
+/** Index where a `<parameter>` body must stop, tolerant of truncated closers. */
+function parameterBoundary(text, escaped) {
+  const candidates = [
+    new RegExp(`</${escaped}\\s+parameter\\s*>`),
+    new RegExp(`<${escaped}\\s+parameter\\b`),
+    new RegExp(`</${escaped}\\s+invoke\\s*>`),
+    new RegExp(`<${escaped}\\s+invoke\\b`),
+    // Degraded closer: the model sometimes emits `PREFIX>` where the proper
+    // `</PREFIX parameter>` belongs. The prefix itself never occurs in prose,
+    // so this cannot truncate a legitimate value.
+    new RegExp(`(?:^|[^<\\/])${escaped}\\s*>`)
+  ];
+  let best = -1;
+  for (const pattern of candidates) {
+    const match = pattern.exec(text);
+    if (match === null) continue;
+    const at = match[0].startsWith('</') || match[0].startsWith('<') ? match.index : match.index + 1;
+    if (best < 0 || at < best) best = at;
+  }
+  return best;
+}
+
 /**
  * Try to read one XML-form invoke block from the start of `input`.
  *
@@ -313,23 +360,25 @@ export function extractInvokeCall(input) {
 
   const body = rest.slice(0, close.index);
   const args = {};
-  const parameter = new RegExp(
-    `<${escaped}\\s+parameter\\s+([^>]*)>([\\s\\S]*?)</${escaped}\\s+parameter\\s*>`,
-    'g'
-  );
-  let match;
-  while ((match = parameter.exec(body)) !== null) {
-    const attributes = match[1];
+  const parameterOpen = new RegExp(`<${escaped}\\s+parameter\\s+([^>]*)>`);
+  let rest2 = body;
+  for (let guard = 0; guard < 200; guard++) {
+    const opening = parameterOpen.exec(rest2);
+    if (opening === null) break;
+    const attributes = opening[1];
     const keyMatch = /name\s*=\s*"([^"]*)"/.exec(attributes);
+    const raw = rest2.slice(opening.index + opening[0].length);
+    const stop = parameterBoundary(raw, escaped);
+    const value = stop < 0 ? raw : raw.slice(0, stop);
+    rest2 = stop < 0 ? '' : raw.slice(stop);
     if (keyMatch === null) continue;
     const key = keyMatch[1];
-    const raw = match[2];
-    if (/string\s*=\s*"true"/.test(attributes)) args[key] = raw;
+    if (/string\s*=\s*"true"/.test(attributes)) args[key] = value;
     else {
       try {
-        args[key] = JSON.parse(raw);
+        args[key] = JSON.parse(value.trim());
       } catch {
-        args[key] = raw;
+        args[key] = value.trim();
       }
     }
   }
@@ -343,6 +392,115 @@ export function extractInvokeCall(input) {
 }
 
 /**
+ * Normalise a parsed call envelope into its arguments.
+ *
+ * Tolerates models that flatten the arguments next to `name` instead of nesting
+ * them under "arguments" (both forms appear in practice on compatible gateways).
+ */
+function describeArguments(parsed) {
+  const { name: _name, arguments: rawArguments, ...inline } = parsed;
+  if (typeof rawArguments === 'string') {
+    try {
+      return { ...inline, ...JSON.parse(rawArguments) };
+    } catch {
+      return inline;
+    }
+  }
+  const nested = rawArguments !== null && typeof rawArguments === 'object' && !Array.isArray(rawArguments) ? rawArguments : {};
+  return { ...inline, ...nested };
+}
+
+/**
+ * Coerce one `<parameter=key>value</parameter>` body using the tool's declared
+ * schema type.
+ *
+ * The tag dialect carries no types, so `limit` would otherwise arrive as the
+ * string "75" and fail schema validation. Coercion is driven by the catalog the
+ * outbound half already captured, so a parameter the schema calls `string` is
+ * never turned into a number just because it looks numeric.
+ */
+function coerceParameter(raw, type) {
+  const text = raw.trim();
+  if (type === 'string') return text;
+  if (type === 'integer' || type === 'number') {
+    const numeric = Number(text);
+    if (text.length > 0 && Number.isFinite(numeric)) return numeric;
+    return text;
+  }
+  if (type === 'boolean') {
+    if (text === 'true') return true;
+    if (text === 'false') return false;
+    return text;
+  }
+  if (type === 'object' || type === 'array') {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return text;
+    }
+  }
+  // Unknown type: only adopt a value that is unambiguously JSON.
+  if (text === 'true') return true;
+  if (text === 'false') return false;
+  return text;
+}
+
+/**
+ * Try to read one `<tool_call>` block from the start of `input`.
+ *
+ * Handles both bodies the qwen/mimo family emits: a JSON envelope, and the
+ * `<function=NAME><parameter=K>V</parameter></function>` tag form. `types`
+ * optionally maps parameter names to schema types for coercion.
+ */
+export function extractToolCallBlock(input, types = undefined) {
+  const open = TOOL_CALL_OPEN.exec(input);
+  if (open === null) return { state: 'none' };
+  const closeAt = input.indexOf(TOOL_CALL_CLOSE, open[0].length);
+  if (closeAt < 0) return { state: 'need' };
+
+  const body = input.slice(open[0].length, closeAt);
+  const consumed = closeAt + TOOL_CALL_CLOSE.length;
+  const trimmed = body.trim();
+  if (trimmed.length === 0) return { state: 'invalid' };
+
+  // Body form 1: a JSON envelope, same shape as the documented marker.
+  if (trimmed.startsWith('{')) {
+    let parsed;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      return { state: 'invalid' };
+    }
+    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) return { state: 'invalid' };
+    if (typeof parsed.name !== 'string' || parsed.name.length === 0) return { state: 'invalid' };
+    return { state: 'ok', name: parsed.name, argsJson: JSON.stringify(describeArguments(parsed)), consumed };
+  }
+
+  // Body form 2: `<function=NAME>` plus repeated `<parameter=K>V</parameter>`.
+  const functionOpen = FUNCTION_OPEN.exec(trimmed);
+  if (functionOpen === null) return { state: 'invalid' };
+  const name = functionOpen[1];
+  const schema = types !== null && typeof types === 'object' ? types[name] : undefined;
+  const args = {};
+  let rest = trimmed.slice(functionOpen[0].length);
+  for (let guard = 0; guard < 200; guard++) {
+    rest = rest.replace(/^[\s,]+/, '');
+    if (rest.length === 0 || rest.startsWith(FUNCTION_CLOSE)) break;
+    const parameterOpen = PARAMETER_OPEN.exec(rest);
+    if (parameterOpen === null) return { state: 'invalid' };
+    const key = parameterOpen[1];
+    rest = rest.slice(parameterOpen[0].length);
+    const parameterClose = rest.indexOf(PARAMETER_CLOSE);
+    if (parameterClose < 0) return { state: 'invalid' };
+    const declared = schema !== null && typeof schema === 'object' ? schema[key] : undefined;
+    args[key] = coerceParameter(rest.slice(0, parameterClose), declared);
+    rest = rest.slice(parameterClose + PARAMETER_CLOSE.length);
+  }
+
+  return { state: 'ok', name, argsJson: JSON.stringify(args), consumed };
+}
+
+/**
  * Wrap an adapter chunk stream, turning text-form tool calls into harness
  * tool-call blocks.
  *
@@ -352,6 +510,10 @@ export function extractInvokeCall(input) {
  */
 export async function* createInboundTransform(source, options = {}) {
   const marker = typeof options.marker === 'string' && options.marker.length > 0 ? options.marker : '@@TOOL@@';
+  /** Parameter schema types per tool, used to type the tag dialect's arguments. */
+  const argumentTypes = options.argumentTypes !== null && typeof options.argumentTypes === 'object' ? options.argumentTypes : {};
+  /** Called once when the stream ends, so the caller can judge protocol support. */
+  const onSettle = typeof options.onSettle === 'function' ? options.onSettle : null;
 
   /** Adapter index of the text block currently being rewritten. */
   let textIndex = null;
@@ -359,6 +521,8 @@ export async function* createInboundTransform(source, options = {}) {
   let textBuffer = '';
   /** Text already emitted for that block; becomes the rewritten block-end body. */
   let emittedText = '';
+  /** Every character shown to the user, for protocol auto-detection. */
+  let visibleText = '';
   /** Whether the replacement text block-start has been emitted. */
   let textOpen = false;
   /** Set after a call, so one closing code fence is swallowed instead of shown. */
@@ -385,6 +549,7 @@ export async function* createInboundTransform(source, options = {}) {
       yield { type: 'block-start', index: textIndex, blockType: 'text' };
     }
     emittedText += text;
+    if (visibleText.length < 65536) visibleText += text;
     yield { type: 'text-delta', index: textIndex, text };
   }
 
@@ -460,7 +625,22 @@ export async function* createInboundTransform(source, options = {}) {
         continue;
       }
 
-      // 3. An XML-form invoke block.
+      // 3. A `<tool_call>` block (qwen / mimo native dialect).
+      const block = extractToolCallBlock(rest, argumentTypes);
+      if (block.state === 'ok') {
+        textBuffer = rest.slice(block.consumed);
+        yield* toolChunks(block.name, block.argsJson);
+        skipFence = true;
+        continue;
+      }
+      if (block.state === 'need' && !final) return;
+      if (block.state === 'invalid' && !final) {
+        // A complete-looking block we cannot parse: only commit once the
+        // closing tag has arrived, otherwise wait for more bytes.
+        if (rest.indexOf(TOOL_CALL_CLOSE) < 0) return;
+      }
+
+      // 4. An XML-form invoke block.
       const invoke = extractInvokeCall(rest);
       if (invoke.state === 'ok') {
         textBuffer = rest.slice(invoke.consumed);
@@ -562,6 +742,12 @@ export async function* createInboundTransform(source, options = {}) {
     yield* drain(true);
     yield* closeText();
   }
+
+  // Auto-detection: a reply that shows tool-call syntax but yielded no call
+  // means this model cannot follow the text protocol.
+  if (onSettle !== null) {
+    onSettle({ toolCalls: toolSequence, suspicious: toolSequence === 0 && CALL_ATTEMPT.test(visibleText) });
+  }
 }
 
 /** Install the outbound catalog rewrite and the inbound text-call parser. */
@@ -582,6 +768,18 @@ export function apply(ctx, config) {
   }
 
   return ctx.effect(() => {
+    /**
+     * Routes proven unusable with the text protocol in this process. Absence
+     * means "not yet disproven", so the plugin starts optimistic and only ever
+     * removes itself from a route it has watched fail.
+     */
+    const downgraded = new Map();
+    /** Parameter schema types per route, captured at assemble time for coercion. */
+    const catalogs = new Map();
+    const routeKey = (provider, model) => `${provider ?? ''}::${model ?? ''}`;
+    /** Whether this route must keep native tool calling. */
+    const isNative = (provider, model) => downgraded.get(routeKey(provider, model)) === 'native';
+
     const disposeAssemble = ctx.on('system-prompt/assemble', async (assembly, context, next) => {
       const assembled = await next();
       if (assembled === null || typeof assembled !== 'object') return assembled;
@@ -591,6 +789,7 @@ export function apply(ctx, config) {
       const provider = assembled.variables?.provider ?? context?.agent?.options?.provider;
       const model = assembled.variables?.model ?? context?.agent?.options?.model;
       if (!routeAllowed(options, provider, model)) return assembled;
+      if (isNative(provider, model)) return assembled;
       const tools = Array.isArray(assembled.tools) ? assembled.tools : [];
       if (tools.length === 0) return assembled;
 
@@ -601,6 +800,19 @@ export function apply(ctx, config) {
         note('warn', `could not render the tool catalog; keeping native tools: ${String(error)}`);
         return assembled;
       }
+
+      // Remember the declared parameter types for this route so the inbound
+      // half can type `<parameter=…>` values that arrive as bare text.
+      const types = {};
+      for (const tool of tools) {
+        const properties = tool?.parameters?.properties;
+        if (tool?.name === undefined || properties === null || typeof properties !== 'object') continue;
+        types[tool.name] = Object.fromEntries(
+          Object.entries(properties).map(([key, schema]) => [key, typeof schema?.type === 'string' ? schema.type : ''])
+        );
+      }
+      catalogs.set(routeKey(provider, model), types);
+
       return {
         ...assembled,
         tools: [],
@@ -610,13 +822,37 @@ export function apply(ctx, config) {
 
     const disposeStream = ctx.on('llm/stream', (request, next) => {
       // The request carries the frozen route, so this is the authoritative gate.
-      if (!routeAllowed(options, request?.provider, request?.model)) return next();
-      if (Array.isArray(request?.tools) && request.tools.length > 0) return next();
-      return createInboundTransform(next(), { marker: options.marker });
+      const allowed = routeAllowed(options, request?.provider, request?.model);
+      const toolsPresent = Array.isArray(request?.tools) && request.tools.length > 0;
+      if (toolsPresent) return next();
+      if (allowed && !isNative(request?.provider, request?.model)) {
+        return createInboundTransform(next(), {
+          marker: options.marker,
+          argumentTypes: catalogs.get(routeKey(request?.provider, request?.model)),
+          onSettle: ({ toolCalls, suspicious }) => {
+            if (!options.autoDetect || !suspicious) return;
+            downgraded.set(routeKey(request?.provider, request?.model), 'native');
+            note(
+              'warn',
+              `${request?.model} showed tool-call syntax but produced ${toolCalls} call(s); ` +
+                'falling back to native tools for this route'
+            );
+          }
+        });
+      }
+      // Safety net: a request with no tools on a route we did not rewrite means
+      // the outbound half judged differently from the frozen request. Parsing the
+      // reply is strictly better than showing raw markup and ending the turn
+      // without running anything, so the same transform is used as a fallback.
+      if (request?.tools !== undefined && toolsPresent === false && options.parseStrippedRoutes) {
+        note('warn', `no tools on ${String(request?.provider)}/${String(request?.model)}; parsing its reply defensively`);
+        return createInboundTransform(next(), { marker: options.marker });
+      }
+      return next();
     });
 
-    const scope = `${options.providers.join(', ') || 'none'}${options.models.length > 0 ? ` / models: ${options.models.join(', ')}` : ''}`;
-    note('info', `active for: ${scope}`);
+    const scope = `${options.providers.join(', ') || 'none'}${options.models.length > 0 ? ` / models: ${options.models.join(', ')}` : ''}${options.denyModels.length > 0 ? ` / deny: ${options.denyModels.join(', ')}` : ''}`;
+    note('info', `active for: ${scope}${options.autoDetect ? ' (auto-detect on)' : ''}`);
 
     return () => {
       disposeAssemble();

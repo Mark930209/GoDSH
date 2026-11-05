@@ -73,6 +73,15 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
   本机 profile 依赖键同步换名。
 - **2026-11-04 · 仓库梳理**：安装方法抽成 [install.md](install.md)，交接文档并入本页，
   `CONTRIBUTING.md` 迁入 `docs/contributing.md`，`AGENTS.md` 转为本地私有（进 `.gitignore`）。
+- **2026-11-05 · `n1n-prompt-tools` 语法扩容（本地未发版，未提交版本号）**：实测 n1n 下 8 个模型，
+  补齐第三种方言 `<tool_call>`（JSON 信封体与 `<function=…><parameter=…>` 标签体，参数按出站
+  捕获的 Schema 强转）；`extractInvokeCall` 改为边界扫描，容忍模型把闭合标签写坏
+  （用 `｜DSML｜>` 顶替规范写法）；新增 `autoDetect`（回复出现调用语法却没解析出调用 → 该路由
+  降级原生 tools）、`denyModels` 黑名单、`parseStrippedRoutes` 兜底。实测 5/9 模型原生遵循
+  `@@TOOL@@`，2 个靠新解析器可用，`glm-5.3` 与 `kimi-k3` 不可用。**模态与协议遵从无关**：
+  `qwen3.8-max-0902` 支持图像却不认文本协议，`glm-5.3-flash` 纯文本反而认。44 项测试。
+  注意：改了 `index.js`/`cordis.patch.yml` 必须**重启 DSH** 才生效（进程不热重载 host 插件代码）。
+
 - **2026-11-05 · `n1n-prompt-tools` 1.0.0（新增，本地未发版）**：解决 native `tools` 字段吃掉
   前缀缓存的问题（**只针对 n1n 网关**，原名 `prompt-tools` 因定位收窄而改名）。出站
   `system-prompt/assemble` 把工具清单确定性渲染进系统提示词并清空 `assembly.tools`；入站

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { renderToolCatalog, stableStringify, extractToolCall, extractInvokeCall, createInboundTransform, resolveOptions, routeAllowed, apply } from '../index.js';
+import { renderToolCatalog, stableStringify, extractToolCall, extractInvokeCall, extractToolCallBlock, createInboundTransform, resolveOptions, routeAllowed, apply } from '../index.js';
 
 const TOOLS = [
   {
@@ -378,12 +378,29 @@ test('the stream hook only wraps a text-protocol (tools-less) n1n request', () =
 
   // An n1n request that still carries native tools is left alone.
   assert.equal(stream({ provider: 'n1n', model: 'deepseek-v4.1-flash', tools: [{ name: 'read' }] }, next), passthrough);
-  for (const provider of ['strata', 'deepseek', '', undefined]) {
-    assert.equal(stream({ provider, model: 'm', tools: [] }, next), passthrough, `provider ${String(provider)} must not be wrapped`);
-  }
+  // A request that never had a `tools` field is not ours either.
+  assert.equal(stream({ provider: 'strata', model: 'm' }, next), passthrough);
   // The n1n text-protocol request is wrapped into a transform iterable.
   const wrapped = stream({ provider: 'n1n', model: 'deepseek-v4.1-flash', tools: [] }, next);
   assert.notEqual(wrapped, passthrough);
+});
+
+test('the defensive net parses a tools-less route instead of leaking markup', () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'], parseStrippedRoutes: true });
+  const stream = ctx.handlers.get('llm/stream');
+  const passthrough = { marker: 'passthrough' };
+  const next = () => passthrough;
+
+  // `tools: []` on another provider means somebody stripped them; parse it.
+  const rescued = stream({ provider: 'strata', model: 'qwen3.8-flash-next-iq3_s', tools: [] }, next);
+  assert.notEqual(rescued, passthrough);
+  assert.ok(ctx.notes.some(([level]) => level === 'warn'));
+
+  // Explicitly switched off: passthrough.
+  const off = fakeCtx();
+  apply(off, { providers: ['n1n'], parseStrippedRoutes: false });
+  assert.equal(off.handlers.get('llm/stream')({ provider: 'strata', model: 'm', tools: [] }, next), passthrough);
 });
 
 test('a models list narrows the gate end to end', async () => {
@@ -396,4 +413,179 @@ test('a models list narrows the gate end to end', async () => {
 
   const blocked = assemblyFor('n1n', 'glm-5.3');
   assert.equal((await assemble(blocked, {}, async () => blocked)).tools.length, 2);
+});
+
+// --- `<tool_call>` dialect (qwen / mimo native syntax).
+
+test('extractToolCallBlock reads the JSON envelope body', () => {
+  const input = '<tool_call>{"name":"read","arguments":{"file_path":"a.txt"}}</tool_call>';
+  const result = extractToolCallBlock(input);
+  assert.equal(result.state, 'ok');
+  assert.equal(result.name, 'read');
+  assert.deepEqual(JSON.parse(result.argsJson), { file_path: 'a.txt' });
+  assert.equal(result.consumed, input.length);
+});
+
+test('extractToolCallBlock reads the function/parameter tag body', () => {
+  const input = '<tool_call><function=read><parameter=file_path>a.txt</parameter></function></tool_call>';
+  const result = extractToolCallBlock(input);
+  assert.equal(result.state, 'ok');
+  assert.equal(result.name, 'read');
+  assert.deepEqual(JSON.parse(result.argsJson), { file_path: 'a.txt' });
+  assert.equal(result.consumed, input.length);
+});
+
+test('extractToolCallBlock tolerates whitespace and newlines between tags', () => {
+  const input = '<tool_call>\n<function=read>\n<parameter=file_path>\nE:\\a b\\c.py\n</parameter>\n<parameter=limit>\n70\n</parameter>\n</function>\n</tool_call>';
+  const result = extractToolCallBlock(input, { read: { file_path: 'string', limit: 'number' } });
+  assert.equal(result.state, 'ok');
+  assert.deepEqual(JSON.parse(result.argsJson), { file_path: 'E:\\a b\\c.py', limit: 70 });
+});
+
+test('extractToolCallBlock only types a parameter the schema calls numeric', () => {
+  const input = '<tool_call><function=run><parameter=command>123</parameter><parameter=limit>70</parameter></function></tool_call>';
+  const typed = extractToolCallBlock(input, { run: { command: 'string', limit: 'integer' } });
+  assert.deepEqual(JSON.parse(typed.argsJson), { command: '123', limit: 70 });
+
+  // Without a schema the value stays text, so a numeric-looking string is safe.
+  const untyped = extractToolCallBlock(input);
+  assert.deepEqual(JSON.parse(untyped.argsJson), { command: '123', limit: '70' });
+});
+
+test('extractToolCallBlock reports need/invalid instead of throwing', () => {
+  assert.equal(extractToolCallBlock('<tool_call><function=read>').state, 'need');
+  assert.equal(extractToolCallBlock('<tool_call>read file_path="a"</tool_call>').state, 'invalid');
+  assert.equal(extractToolCallBlock('@@TOOL@@ {"name":"read"}').state, 'none');
+});
+
+test('the transform turns a streamed `<tool_call>` into a tool-call block', async () => {
+  const body = '<tool_call>\n<function=read>\n<parameter=file_path>a.txt</parameter>\n</function>\n</tool_call>';
+  const { text, toolBlocks } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: 'let me look\n\n' },
+    { type: 'text-delta', index: 0, text: body.slice(0, 20) },
+    { type: 'text-delta', index: 0, text: body.slice(20) },
+    { type: 'block-end', index: 0, block: { type: 'text', text: '' } }
+  ]);
+  assert.equal(text.trim(), 'let me look');
+  assert.equal(toolBlocks.length, 1);
+  assert.equal(toolBlocks[0].name, 'read');
+  assert.deepEqual(JSON.parse(toolBlocks[0].arguments), { file_path: 'a.txt' });
+});
+
+test('auto-detect falls back to native tools after a visible protocol failure', async () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'], autoDetect: true });
+  const assemble = ctx.handlers.get('system-prompt/assemble');
+  const stream = ctx.handlers.get('llm/stream');
+
+  // First step: the route is still trusted, so the catalog replaces the tools.
+  const first = assemblyFor('n1n', 'glm-5.3');
+  assert.deepEqual((await assemble(first, {}, async () => first)).tools, []);
+
+  // The model then answers with markup the parser cannot consume.
+  const wrapped = stream({ provider: 'n1n', model: 'glm-5.3', tools: [] }, () =>
+    (async function* () {
+      yield blockStart(0, 'text');
+      yield { type: 'text-delta', index: 0, text: 'ok<tool_call>read  file_path="a.txt"</arg_value>' };
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: '' } };
+    })()
+  );
+  for await (const chunk of wrapped) void chunk;
+
+  assert.ok(
+    ctx.notes.some(([level, line]) => level === 'warn' && line.includes('falling back to native tools')),
+    'the fallback must be logged'
+  );
+
+  // Next step: the same route keeps native tools.
+  const second = assemblyFor('n1n', 'glm-5.3');
+  assert.equal((await assemble(second, {}, async () => second)).tools.length, 2);
+});
+
+test('auto-detect leaves a well-behaved route alone', async () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'], autoDetect: true });
+  const assemble = ctx.handlers.get('system-prompt/assemble');
+  const stream = ctx.handlers.get('llm/stream');
+
+  const wrapped = stream({ provider: 'n1n', model: 'deepseek-v4.1-flash', tools: [] }, () =>
+    (async function* () {
+      yield blockStart(0, 'text');
+      yield { type: 'text-delta', index: 0, text: '@@TOOL@@ {"name":"read","arguments":{"file_path":"a.txt"}}' };
+      yield { type: 'block-end', index: 0, block: { type: 'text', text: '' } };
+    })()
+  );
+  for await (const chunk of wrapped) void chunk;
+
+  assert.equal(ctx.notes.some(([level]) => level === 'warn'), false);
+  const next = assemblyFor('n1n', 'deepseek-v4.1-flash');
+  assert.deepEqual((await assemble(next, {}, async () => next)).tools, []);
+});
+
+test('denyModels wins over models and keeps native tools', async () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'], denyModels: ['glm-5.3'] });
+  const assemble = ctx.handlers.get('system-prompt/assemble');
+
+  const denied = assemblyFor('n1n', 'glm-5.3');
+  assert.equal((await assemble(denied, {}, async () => denied)).tools.length, 2);
+
+  const allowed = assemblyFor('n1n', 'deepseek-v4.1-flash');
+  assert.deepEqual((await assemble(allowed, {}, async () => allowed)).tools, []);
+});
+
+test('config defaults enable auto-detection with an empty deny list', () => {
+  assert.equal(resolveOptions({}).autoDetect, true);
+  assert.equal(resolveOptions({ autoDetect: false }).autoDetect, false);
+  assert.deepEqual(resolveOptions({}).denyModels, []);
+});
+
+// --- the exact DSML shape seen in a real transcript, plus its truncated closes.
+
+const DSML = '\uFF5CDSML\uFF5C';
+
+test('extractInvokeCall parses the DSML dialect captured from a real session', () => {
+  const input =
+    `<${DSML} invoke name="pwsh">\n` +
+    `<${DSML} parameter name="command" string="true">Get-ChildItem "C:\\temp" | Select-Object Name</${DSML} parameter>\n` +
+    `<${DSML} parameter name="timeout_ms" string="false">45000</${DSML} parameter>\n` +
+    `</${DSML} invoke>`;
+  const result = extractInvokeCall(input);
+  assert.equal(result.state, 'ok');
+  assert.equal(result.name, 'pwsh');
+  assert.deepEqual(JSON.parse(result.argsJson), {
+    command: 'Get-ChildItem "C:\\temp" | Select-Object Name',
+    timeout_ms: 45000
+  });
+  assert.equal(result.consumed, input.length);
+});
+
+test('extractInvokeCall survives a truncated parameter closer', () => {
+  // The model drops `</` and ` parameter`: `｜DSML｜>` closes the value instead.
+  const input =
+    `<${DSML} invoke name="pwsh">\n` +
+    `<${DSML} parameter name="description" string="true">构建前端${DSML}>\n` +
+    `<${DSML} parameter name="timeout_ms" string="false">45000${DSML}>\n` +
+    `</${DSML} invoke>`;
+  const result = extractInvokeCall(input);
+  assert.equal(result.state, 'ok');
+  assert.deepEqual(JSON.parse(result.argsJson), { description: '构建前端', timeout_ms: 45000 });
+});
+
+test('the transform converts a streamed DSML invoke into a tool call', async () => {
+  const tail =
+    `<${DSML} parameter name="pattern">**/*.log</${DSML} parameter>` +
+    `</${DSML} invoke>`;
+  const head = `<${DSML} calls>\n<${DSML} invoke name="glob">\n<${DSML} parameter name="path">C:\\x</${DSML} parameter>\n`;
+  const { toolBlocks, text } = await runTransform([
+    blockStart(0, 'text'),
+    { type: 'text-delta', index: 0, text: '先取证。\n\n' + head.slice(0, 30) },
+    { type: 'text-delta', index: 0, text: head.slice(30) + tail },
+    { type: 'block-end', index: 0, block: { type: 'text', text: '' } }
+  ]);
+  assert.equal(text.trim(), '先取证。');
+  assert.equal(toolBlocks.length, 1);
+  assert.equal(toolBlocks[0].name, 'glob');
+  assert.deepEqual(JSON.parse(toolBlocks[0].arguments), { path: 'C:\\x', pattern: '**/*.log' });
 });

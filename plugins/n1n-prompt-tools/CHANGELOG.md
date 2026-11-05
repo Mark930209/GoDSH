@@ -1,5 +1,27 @@
 # Changelog
 
+## 未发版 — 2026-11-05（语法扩容 + 自动降级 + 宽容闭合）
+
+实测 n1n 网关下 8 个模型的文本协议遵从度后补齐（`scripts/_proto_probe.mjs`）：
+
+| 模型 | 实测输出 | 结论 |
+| --- | --- | --- |
+| `deepseek-v4.1-flash`、`glm-5.3-flash`、`kimi-k3.1-pro`、`qwen3.8-flash`、`mimo-v2.6-flash` | `@@TOOL@@ {…}` | 正常 |
+| `qwen3.8-max-0902` | `<tool_call>{"name":…}</tool_call>` | 新解析器支持 |
+| `mimo-v2.6-pro` | `<tool_call><function=…><parameter=…>` | 新解析器支持 |
+| `glm-5.3` | 残缺 `<tool_call>read file_path="…"</arg_value>` | 不可用，自动降级 |
+| `kimi-k3` | 空内容 | 不可用 |
+
+- 新增 `<tool_call>` 方言解析 `extractToolCallBlock()`：同时支持 JSON 信封体与
+  `<function=NAME><parameter=K>V</parameter></function>` 标签体；参数类型按出站时捕获的
+  Schema 强转，`limit` 不会再退化成字符串。
+- `extractInvokeCall()` 改为边界扫描，容忍模型把闭合标签写坏（用 `｜DSML｜>` 顶替规范写法）。
+- 新增 `autoDetect` 自动检测：回复里出现工具调用语法却没解析出调用时，立刻把该
+  provider/model 路由降级为原生 `tools`，本进程后续不再改写它。
+- 新增 `denyModels` 黑名单（优先级高于 `models`）与 `parseStrippedRoutes` 兜底：
+  请求没有 `tools` 字段时仍然解析回复，避免"漏出标记后整轮停住"。
+- 测试增至 44 项。
+
 ## 1.0.0 — 2026-11-05
 
 初始版本（原名 `dsh-prompt-tools`，因只针对 n1n 网关而改名为 `dsh-n1n-prompt-tools`）。
