@@ -3,7 +3,7 @@
 本文件记录所有值得注意的变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 **版本策略：只有用户明确要求发版时才 bump / 打 tag / 建 Release。**
 
-## [Unreleased]
+## [1.0.2] - 2026-11-05
 
 ### Fixed
 
@@ -19,13 +19,17 @@
   - 预算用尽后**不再清零**：之后每次失败都交给 `next()`，由内置 `@deepseek-ai/dsh-llm-retry`
     接管（它用自己的 `policyKey` 连续计数，写出的行始终合法），整轮最终失败后再由续跑层开新轮、新预算；
   - `session.append` 写失败时把该链标记为不可用，避免后续写入跳号。
-- 新增 3 项回归测试：预算耗尽后同一 `turn:step` 内序号只到 `maxRequestRetries` 为止、不重启；
+
+### Added
+
+- 3 项回归测试：预算耗尽后同一 `turn:step` 内序号只到 `maxRequestRetries` 为止、不重启；
   `llm/retry-started` 不重复且逐条配对；新 `turn` 使用新的 `retryId` 并从 1 重新计数。
 
 ### Notes
 
-- 已损坏的旧会话不会被修复逻辑回溯修复，需要用一次性脚本处理（按编号而非按值定位重启段，
-  把重启段迁到新链 `auto-retry#2` 等）。宿主的官方 v4 校验器可作为唯一验收标准。
+- 已写坏的旧会话不会被本插件回溯修复。这类日志要用一次性脚本定向处理
+  （按行号而非按值定位重启段，把重启段迁到新链 `auto-retry#2` 等），
+  宿主的官方 v4 校验器（`SessionFormatError` 校验）可作为唯一验收标准。
 
 ## [1.0.1] - 2026-11-04
 
