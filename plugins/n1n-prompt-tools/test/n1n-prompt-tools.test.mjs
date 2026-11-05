@@ -493,13 +493,38 @@ test('the stream hook only wraps a text-protocol (tools-less) n1n request', () =
   const passthrough = { marker: 'passthrough' };
   const next = () => passthrough;
 
-  // An n1n request that still carries native tools is left alone.
-  assert.equal(stream({ provider: 'n1n', model: 'deepseek-v4.1-flash', tools: [{ name: 'read' }] }, next), passthrough);
+  // An n1n request that still carries native tools is rewritten here instead:
+  // the outbound half's return value can be replaced further up the waterfall,
+  // so this is the last chance to get the tools off the wire.
+  const rescued = stream(
+    { provider: 'n1n', model: 'deepseek-v4.1-flash', tools: [{ name: 'read', parameters: { type: 'object' } }], messages: [] },
+    next
+  );
+  assert.notEqual(rescued, passthrough, 'a tools-carrying n1n request must be rewritten and parsed');
   // A request that never had a `tools` field is not ours either.
   assert.equal(stream({ provider: 'strata', model: 'm' }, next), passthrough);
   // The n1n text-protocol request is wrapped into a transform iterable.
   const wrapped = stream({ provider: 'n1n', model: 'deepseek-v4.1-flash', tools: [] }, next);
   assert.notEqual(wrapped, passthrough);
+});
+
+test('the stream hook strips tools in place when the outbound half did not', () => {
+  const ctx = fakeCtx();
+  apply(ctx, { providers: ['n1n'] });
+  const stream = ctx.handlers.get('llm/stream');
+  const request = {
+    provider: 'n1n',
+    model: 'deepseek-v4.1-flash',
+    tools: TOOLS.filter((tool) => tool.deferLoading !== true),
+    messages: [{ role: 'system', content: 'base prompt' }]
+  };
+  const handed = { marker: 'adapter' };
+  const streamed = stream(request, () => handed);
+
+  assert.deepEqual(request.tools, [], 'the request must reach the adapter with no tools');
+  assert.ok(request.messages[0].content.startsWith('base prompt'), 'the base prompt must be preserved');
+  assert.ok(request.messages[0].content.includes('@@TOOL@@'), 'the catalog must be appended to the system message');
+  assert.notEqual(streamed, handed, 'the reply must still be parsed');
 });
 
 test('the defensive net parses a tools-less route instead of leaking markup', () => {

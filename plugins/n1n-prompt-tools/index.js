@@ -813,11 +813,24 @@ export function apply(ctx, config) {
     const routeKey = (provider, model) => `${provider ?? ''}::${model ?? ''}`;
     /** Whether this route must keep native tool calling. */
     const isNative = (provider, model) => downgraded.get(routeKey(provider, model)) === 'native';
+    /** Parameter name → JSON Schema type, per tool, for inbound coercion. */
+    const captureTypes = (tools) => {
+      const types = {};
+      for (const tool of tools) {
+        const properties = tool?.parameters?.properties;
+        if (tool?.name === undefined || properties === null || typeof properties !== 'object') continue;
+        types[tool.name] = Object.fromEntries(
+          Object.entries(properties).map(([key, schema]) => [key, typeof schema?.type === 'string' ? schema.type : ''])
+        );
+      }
+      return types;
+    };
 
-    const assemblePrompt = async (assembly, context, next) => {
+    const makeAssemblePrompt = (via) => async (assembly, context, next) => {
       const assembled = await next();
       diag({
         hook: 'assemble:entered',
+        via,
         raw: assembly === undefined ? 'undefined' : Array.isArray(assembly?.sections) ? 'assembly' : typeof assembly,
         after: assembled === null || typeof assembled !== 'object' ? String(assembled) : Array.isArray(assembled.sections) ? 'assembly' : typeof assembled
       });
@@ -846,7 +859,9 @@ export function apply(ctx, config) {
           agentKeys = 'unreadable';
         }
         diag({
-          hook: 'assemble',
+          hook: 'assemble:exit',
+          via,
+          reason: 'not-allowed',
           variables: assembled.variables ?? null,
           header: header ?? null,
           optionsProvider: context?.agent?.options?.provider ?? null,
@@ -860,29 +875,29 @@ export function apply(ctx, config) {
         });
       }
       if (!allowed) return assembled;
-      if (isNative(provider, model)) return assembled;
+      if (isNative(provider, model)) {
+        diag({ hook: 'assemble:exit', reason: 'native' });
+        return assembled;
+      }
       const tools = Array.isArray(assembled.tools) ? assembled.tools : [];
-      if (tools.length === 0) return assembled;
+      if (tools.length === 0) {
+        diag({ hook: 'assemble:exit', reason: 'no-tools' });
+        return assembled;
+      }
 
       let catalog;
       try {
         catalog = renderToolCatalog(tools, options);
       } catch (error) {
+        diag({ hook: 'assemble:exit', reason: 'render-failed', error: String(error) });
         note('warn', `could not render the tool catalog; keeping native tools: ${String(error)}`);
         return assembled;
       }
+      diag({ hook: 'assemble:exit', reason: 'rewritten', tools: tools.length, catalog: catalog.length });
 
       // Remember the declared parameter types for this route so the inbound
       // half can type `<parameter=…>` values that arrive as bare text.
-      const types = {};
-      for (const tool of tools) {
-        const properties = tool?.parameters?.properties;
-        if (tool?.name === undefined || properties === null || typeof properties !== 'object') continue;
-        types[tool.name] = Object.fromEntries(
-          Object.entries(properties).map(([key, schema]) => [key, typeof schema?.type === 'string' ? schema.type : ''])
-        );
-      }
-      catalogs.set(routeKey(provider, model), types);
+      catalogs.set(routeKey(provider, model), captureTypes(tools));
 
       return {
         ...assembled,
@@ -897,7 +912,7 @@ export function apply(ctx, config) {
     // does. The root listener stays as a harmless fallback for a harness that
     // ever dispatches this event globally; the `tools.length === 0` guard makes
     // double application impossible.
-    const disposeRootAssemble = ctx.on('system-prompt/assemble', assemblePrompt);
+    const disposeRootAssemble = ctx.on('system-prompt/assemble', makeAssemblePrompt('root'));
     /** Scoped assemble disposers, keyed by agent id. */
     const attached = new Map();
     const attach = (agent) => {
@@ -907,7 +922,7 @@ export function apply(ctx, config) {
         if (id === undefined || attached.has(id)) return;
         const agentCtx = agent.ctx;
         if (agentCtx === null || typeof agentCtx !== 'object' || typeof agentCtx.on !== 'function') return;
-        const dispose = agentCtx.on('system-prompt/assemble', assemblePrompt);
+        const dispose = agentCtx.on('system-prompt/assemble', makeAssemblePrompt('scoped'));
         attached.set(id, typeof dispose === 'function' ? dispose : () => {});
       } catch {
         // An agent we cannot scope simply keeps native tools.
@@ -943,9 +958,52 @@ export function apply(ctx, config) {
         model: request?.model ?? null,
         tools: Array.isArray(request?.tools) ? request.tools.length : request?.tools === undefined ? 'absent' : 'other',
         allowed,
-        downgraded: isNative(request?.provider, request?.model)
+        downgraded: isNative(request?.provider, request?.model),
+        sysHasCatalog: Array.isArray(request?.messages)
+          ? request.messages.some((message) => {
+              const content = message?.content;
+              if (typeof content === 'string') return content.includes('@@TOOL@@');
+              if (Array.isArray(content)) return content.some((part) => typeof part?.text === 'string' && part.text.includes('@@TOOL@@'));
+              return false;
+            })
+          : 'no-messages',
+        messageCount: Array.isArray(request?.messages) ? request.messages.length : -1
       });
-      if (toolsPresent) return next();
+      if (toolsPresent && !(allowed && !isNative(request?.provider, request?.model))) return next();
+      if (toolsPresent) {
+        // Belt and braces: if the outbound half did not strip the tools (its
+        // return value can be replaced further up the waterfall), do it here on
+        // the request object itself. `adapterStream` reads this same object, so
+        // an in-place edit reaches the wire. The inbound transform below still
+        // wraps the reply either way.
+        try {
+          const catalog = renderToolCatalog(request.tools, options);
+          if (Object.isFrozen(request)) {
+            diag({ hook: 'stream:rewrite', ok: false, reason: 'frozen' });
+            return next();
+          }
+          catalogs.set(routeKey(request.provider, request.model), captureTypes(request.tools));
+          const count = request.tools.length;
+          request.tools = [];
+          const messages = Array.isArray(request.messages) ? request.messages : undefined;
+          if (messages === undefined) {
+            diag({ hook: 'stream:rewrite', ok: false, reason: 'no-messages' });
+          } else {
+            const first = messages[0];
+            if (first !== null && typeof first === 'object' && first.role === 'system') {
+              if (typeof first.content === 'string') first.content = `${first.content}\n\n${catalog}`;
+              else if (Array.isArray(first.content)) first.content = [...first.content, { type: 'text', text: catalog }];
+              else first.content = catalog;
+            } else {
+              messages.unshift({ role: 'system', content: catalog });
+            }
+            diag({ hook: 'stream:rewrite', ok: true, tools: count });
+          }
+        } catch (error) {
+          diag({ hook: 'stream:rewrite', ok: false, reason: String(error) });
+          return next();
+        }
+      }
       if (allowed && !isNative(request?.provider, request?.model)) {
         return createInboundTransform(next(), {
           marker: options.marker,
