@@ -144,7 +144,7 @@
       ]
     },
     {
-      "name": "dsh-file-tree",
+      "name": "@guimaxingtian/dsh-file-tree",
       "title": {
         "en": "File Tree Enhancements",
         "zh": "文件树增强"
@@ -193,17 +193,17 @@
           "community"
         ],
         "sortKeys": {
-          "updated": 1793958235
+          "updated": 1793959150
         }
       },
       "versions": [
         {
-          "version": "1.1.0",
-          "publishTimestamp": 1793958235,
+          "version": "1.1.1",
+          "publishTimestamp": 1793959150,
           "source": {
             "type": "git",
             "url": "https://github.com/Mark930209/GoDSH",
-            "commit": "22a14a17ceee240286944ad96f98cd4ba7d90f45",
+            "commit": "79a80bd6e11927399df42f44f37deee35480bafb",
             "path": "plugins/dsh-file-tree"
           },
           "engines": {
