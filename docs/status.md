@@ -53,12 +53,39 @@
 | DSH 实现 checkout | `…\resources\app.asar\dsh`（**asar 归档**：PowerShell 读不到内部，只能用 DSH 的 read 工具/grep） |
 | profile | `desktop`（`C:\Users\congzhisen\.dsh\profiles\desktop`） |
 | 插件安装方式 | `link:E:/Projects/DSH_Plugins_Dev/plugins/<目录名>` |
+| 外部（同事）插件 | `dsh-llm-text-tools` → 源码 `E:\Projects\DSH_Plugins_Ext\dsh-llm-text-tools`，`link:` 装进 desktop profile；**带运行时依赖的 link 插件必须在该目录跑过一次 `pnpm install`**（Node 按真实路径解析依赖） |
 | npm 账号 / token | `guimaxingtian`，`~/.npmrc` 存 `//registry.npmjs.org/:_authToken`（Classic → Automation）；本机默认 registry 是内网镜像 `http://10.66.12.81:4873/`，发布必须显式 `--registry=https://registry.npmjs.org/` |
 | Node / Git / npm | v24.15.0 / 2.46.0 / 11.12.1 |
 | RTK（Rust Token Killer） | `0.45.0`，`C:\Users\congzhisen\.local\bin\rtk.exe`；**未给 DSH 装 hook**（`rtk init` 无 DSH 目标） |
 | 验证基线 | DSH `0.2.1-rc.5`，Windows 桌面端 |
 
 ## 已完成（时间线）
+
+- **2026-11-06 · 安装同事的第三方插件 `dsh-llm-text-tools`（内网 git）**。用户给的是
+  `http://git.51vr.local/xuyifei/dsh-llm-text-tools`（本人仓库，0.2.0，HEAD `b53c892`）。
+  - **放哪**：克隆到 **`E:\Projects\DSH_Plugins_Ext\dsh-llm-text-tools`**。同事的包不进本仓库、
+    也不进 `plugins/`（那里只放自研插件，混进去会被当成自家包发版）。
+  - **怎么装**：本会话 **没有 `plugin_manager` 工具**，改为手工复刻 `install_bundle`：
+    `profiles\desktop\package.json` 的 `dsh.profile.bundles` 加 `dsh-llm-text-tools`、
+    `dependencies` 加 `link:E:/Projects/DSH_Plugins_Ext/dsh-llm-text-tools`，再在 profile 目录
+    `pnpm install`。改前备份 `package.json.bak-20261106-install-llm-text-tools`。
+  - **踩到的坑（新知识）**：`link:` 是指向真目录的符号链接，Node 按**真实路径**解析 bare import，
+    插件目录没有自己的 `node_modules` 时 `@deepseek-ai/schemastery` 直接
+    `ERR_MODULE_NOT_FOUND`。本仓库三个插件没有运行时依赖，所以以前没暴露。修法：在插件目录里跑
+    一次 `pnpm install`（装上 `@deepseek-ai/schemastery` 3.19.0 + `@deepseek-ai/cordis` 4.0.5）。
+    **今后装任何带依赖的第三方 link 插件都要做这一步**，否则重启时插件加载失败。
+  - **验证（重启前能做的都做了）**：插件自带 `node --check` 与 62 项单元测试全绿；
+    `createRequire(profile/package.json).resolve()` + `import()` 实测加载成功、`apply()` 正常注册
+    `n1n-text` 路由；另用临时 profile（复制 desktop 的 `package.json`/`cordis.patch.yml` + junction
+    `node_modules`）跑 `dsh --profile <tmp> --dump-config`，确认合成结果里出现
+    `id: llm-text-tools` / `provider: n1n-text` 且位置正确（验证完已删除临时 profile 与 junction）。
+  - **生效方式**：bundle 自带 patch 会插入**一条新路由** `n1n-text`（`https://llm-api.net/v1`，
+    模型 `deepseek-v4.1-flash` / `deepseek-v4-pro`，`reasoningEffort: high`，凭据 `N1N_API_KEY`），
+    与原 `n1n` 路由并存；默认模型仍是 `n1n / deepseek-v4.1-flash`，不切换过去就没有行为变化。
+    要调参（如 `contextWindow`）在 profile `cordis.patch.yml` 里按 `id: llm-text-tools` 覆盖。
+  - [ ] **待用户重启 [DSH]** 后确认：模型选择器出现 `n1n-text` 路由、Plugins 页该行 `active`、
+        `deepseek-v4.1-flash` 回一句正常回答（注意 `maxTokens: 384000` 是作者给的默认值，
+        n1n 若不接受 400 就在 patch 里调小）。
 
 - **2026-11-06 · `dsh-file-tree` 改名 + Git 状态（工作区，未发版）**。参考 `dsh-better-sidebar` 的
   Git 状态实现，给文件树加：

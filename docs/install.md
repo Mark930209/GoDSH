@@ -120,3 +120,8 @@ plugin_manager install_bundle  target = E:\Projects\DSH_Plugins_Dev\plugins\<nam
 5. 装了但没反应：先确认 profile 的依赖键是**当前包名**——
    改过包名的插件（如历史上的 `@local/*` → `dsh-*`）必须 `remove_bundle` 旧名再装，
    否则 `node_modules` 里还是旧名，行里的 `moduleName` 与依赖键对不上。
+6. **第三方 `link:` 插件带运行时依赖时，必须在插件源码目录里跑一次 `pnpm install`**。
+   `link:` 是真符号链接，Node 按**解析后的真实路径**找 bare import，不会回到 profile 的
+   `node_modules`；缺依赖时表现为启动加载失败 `ERR_MODULE_NOT_FOUND: Cannot find package
+   '@deepseek-ai/...'`。本仓库三个插件都没有运行时依赖，所以只在装外部插件时才会遇到
+   （2026-11-06 装 `dsh-llm-text-tools` 时踩到）。
