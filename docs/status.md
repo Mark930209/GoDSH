@@ -33,10 +33,10 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。
 |---|---|---|---|---|
 | `plugins/auto-retry` | `dsh-auto-retry` | 1.0.2 | `auto-retry-v1.0.2`（`12a89aa`） | link，active |
 | `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | 1.0.1 | `composer-skill-picker-v1.0.1`（`e30c3b2`） | link，active |
-| `plugins/dsh-file-tree` | `@guimaxingtian/dsh-file-tree`（旧名 `dsh-file-tree-context-menu`） | 1.1.2 | `dsh-file-tree-v1.1.2`（`0faf870`） | link，重启后加载 |
+| `plugins/dsh-file-tree` | `@guimaxingtian/dsh-file-tree`（旧名 `dsh-file-tree-context-menu`） | 1.1.3 | `dsh-file-tree-v1.1.3`（`fc60297`） | link，重启后加载 |
 
 - 公共 npm：`dsh-auto-retry` `1.0.2`、`dsh-composer-skill-picker` `1.0.1`、
-  `@guimaxingtian/dsh-file-tree` `1.1.2`（裸名 `dsh-file-tree` 被 npm 判为与第三方包
+  `@guimaxingtian/dsh-file-tree` `1.1.3`（裸名 `dsh-file-tree` 被 npm 判为与第三方包
   `dsh-filetree` 过于相似而拒收，故改用作用域包名）。旧包 `dsh-file-tree-context-menu`
   停在 `1.0.1`，不再更新。
   npm 包页同时残留一个 `0.0.0-stage` 占位版本（staged publishing 产物，见

@@ -18,7 +18,7 @@
 |---|---|---|---|
 | `plugins/auto-retry` | `dsh-auto-retry` | 1.0.2 | <https://www.npmjs.com/package/dsh-auto-retry> |
 | `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | 1.0.1 | <https://www.npmjs.com/package/dsh-composer-skill-picker> |
-| `plugins/dsh-file-tree` | `@guimaxingtian/dsh-file-tree` | 1.1.2 | <https://www.npmjs.com/package/@guimaxingtian/dsh-file-tree> |
+| `plugins/dsh-file-tree` | `@guimaxingtian/dsh-file-tree` | 1.1.3 | <https://www.npmjs.com/package/@guimaxingtian/dsh-file-tree> |
 
 > **为什么带作用域**：npm 的包名相似度检查把裸名 `dsh-file-tree` 判定为与第三方包
 > `dsh-filetree`（mdikarev 的 Workspace file tree panel）过于相似，直接返回 403 并建议改用作用域包名。
@@ -31,7 +31,7 @@
 dsh-auto-retry
 ```
 
-要钉版本就填 `dsh-auto-retry@1.0.2`、`@guimaxingtian/dsh-file-tree@1.1.2`。
+要钉版本就填 `dsh-auto-retry@1.0.2`、`@guimaxingtian/dsh-file-tree@1.1.3`。
 
 命令行等价（仅把包拉到本地，不注册进 DSH）：
 
@@ -55,7 +55,7 @@ monorepo **必须带 `path:`**，否则装的是仓库根。当前各插件的�
 ```powershell
 git+https://github.com/Mark930209/GoDSH.git#12a89aad7f085ba23ea3ad7c1bf2816336337569&path:/plugins/auto-retry
 git+https://github.com/Mark930209/GoDSH.git#e30c3b2a7f6ee07747ec0ff7af920c1e7b91526b&path:/plugins/composer-skill-picker
-git+https://github.com/Mark930209/GoDSH.git#0faf87021a8b926d27b087260d6406156c2db0a2&path:/plugins/dsh-file-tree
+git+https://github.com/Mark930209/GoDSH.git#fc60297d92b7614538cb19babf02661c69a543c3&path:/plugins/dsh-file-tree
 ```
 
 拿某个 tag 的 commit：
@@ -81,6 +81,23 @@ git rev-parse auto-retry-v1.0.2^{commit}
 
 索引由 `docs/market-index.json` 生成并托管在 GitHub Pages，规则见
 [publishing.md](publishing.md#三市场索引聚合)。
+
+### 安装后起不来？先看 bundle 有没有重复
+
+DSH 的 Web 启动是"一个客户端插件加载失败就整页失败"（报 `web boot: N entry did not activate`）。
+最常见的原因不是插件本身，而是 profile 里**同一个插件挂了两条 bundle 条目**——例如改名后旧的
+`dsh-file-tree` 没删掉，又装了新的 `@guimaxingtian/dsh-file-tree`，两条都指向同一份源码。
+浏览器会把同一份 `client.js` 执行两遍，第二遍报 `duplicate factory registration`。
+
+排查（把 `desktop` 换成你的 profile 名）：
+
+```powershell
+Get-Content "$env:USERPROFILE\.dsh\profiles\desktop\package.json" | Select-String 'file-tree'
+Get-ChildItem "$env:USERPROFILE\.dsh\profiles\desktop\node_modules" | Where-Object Name -like '*file-tree*'
+```
+
+清理：`dsh.profile.bundles` 与 `dependencies` 里只保留一条（推荐带作用域的新名），删掉
+`node_modules` 下旧名的目录链接，然后重启 DSH。
 
 ## 4. 拷贝目录安装（离线）
 
