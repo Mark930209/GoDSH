@@ -18,10 +18,13 @@
 |---|---|---|---|
 | `plugins/auto-retry` | `dsh-auto-retry` | 1.0.2 | <https://www.npmjs.com/package/dsh-auto-retry> |
 | `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | 1.0.1 | <https://www.npmjs.com/package/dsh-composer-skill-picker> |
-| `plugins/dsh-file-tree` | `dsh-file-tree` | 1.1.0 | <https://www.npmjs.com/package/dsh-file-tree> |
+| `plugins/dsh-file-tree` | 待定 | 1.1.0 | npm 拒收裸名，见下 |
 
-> 文件树插件原名 `dsh-file-tree-context-menu`（最后版本 1.0.1，含旧右键菜单、无 Git 状态）。
-> 该旧包仍在 npm 且可安装，但已停止更新；新功能只随 `dsh-file-tree` 发布。
+> **文件树插件的 npm 发布被阻塞**：npm 的包名相似度检查把 `dsh-file-tree` 判定为
+> 与已有的第三方包 `dsh-filetree`（mdikarev 的 Workspace file tree panel）过于相似，直接返回 403，
+> 并建议改用作用域包名。因此 1.1.0 目前只通过 **git tag / GitHub Release / 市场索引** 分发；
+> 包名定下来后补发 npm 即可，功能完全一致。
+> 旧包 `dsh-file-tree-context-menu@1.0.1`（含旧右键菜单、无 Git 状态）仍在 npm 且可安装，但已停止更新。
 
 在 DSH 里装：**Web 侧边栏 → Plugins → npm 安装页 → 填包名**，例如：
 

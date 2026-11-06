@@ -64,7 +64,9 @@ install_bundle  target = <本目录绝对路径>
 git+https://github.com/Mark930209/GoDSH.git#<40位commit>&path:/plugins/dsh-file-tree
 ```
 
-方式三（从 npm 安装）：`dsh-file-tree@1.1.0`（公共 npm，自 2026-11-06 起可用）。
+方式三（从 npm 安装）：**暂不可用**。1.1.0 已发布到 git tag / GitHub Release / 市场索引，
+但 npm 的包名相似度检查拒绝了裸名 `dsh-file-tree`（已有第三方包 `dsh-filetree`），
+需要先确定作用域名或替代名后再补发。
 
 > **改动生效**：本 bundle 以 `link:` 方式安装，修改 `client.js` / `index.js` 后**重启 DeepSeek Harness** 即可加载新代码
 > （替换已安装的包必须重启才会加载新一代 JS 模块，仅刷新页面不一定够）。

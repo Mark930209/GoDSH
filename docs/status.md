@@ -11,7 +11,8 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。
 
 > **2026-11-06 已发版**：`file-tree-context-menu` 改名为 **`dsh-file-tree`**，
 > 并加入 Git 改动着色 / 字母徽标 / 页头分支胶囊（含未推送提交数）。版本 **1.1.0**，
-> tag `dsh-file-tree-v1.1.0`（`22a14a1`），市场索引已刷新，npm 已发布。
+> tag `dsh-file-tree-v1.1.0`（`22a14a1`）、GitHub Release、市场索引均已就绪；
+> **npm 因包名与 `dsh-filetree` 相似被拒，尚未发布**。
 > 旧包 `dsh-file-tree-context-menu@1.0.1` 保留但不再更新。
 `n1n-prompt-tools` 已于 2026-11-06 **整体废弃删除**（从未发版，无 tag / 无 npm 包 / 不在
 市场索引）；它沉淀的缓存与协议知识保留在 `docs/prompt-cache-investigation.md`、
@@ -33,8 +34,10 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。
 | `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | 1.0.1 | `composer-skill-picker-v1.0.1`（`e30c3b2`） | link，active |
 | `plugins/dsh-file-tree` | `dsh-file-tree`（旧名 `dsh-file-tree-context-menu`） | 1.1.0 | `dsh-file-tree-v1.1.0`（`22a14a1`） | link，active |
 
-- 公共 npm：`dsh-auto-retry` 为 `1.0.2`、`dsh-composer-skill-picker` 为 `1.0.1`、`dsh-file-tree` 为 `1.1.0`；
-  旧包 `dsh-file-tree-context-menu` 停在 `1.0.1`，不再更新。
+- 公共 npm：`dsh-auto-retry` 为 `1.0.2`、`dsh-composer-skill-picker` 为 `1.0.1`；
+  `dsh-file-tree@1.1.0` **尚未发布到 npm**——npm 的包名相似度检查把它判为与第三方包
+  `dsh-filetree` 过于相似（403），需先定作用域名/替代名。旧包 `dsh-file-tree-context-menu`
+  停在 `1.0.1`，不再更新。
   npm 包页同时残留一个 `0.0.0-stage` 占位版本（staged publishing 产物，见
   [publishing.md](publishing.md#账号层面的两个坑已踩过)），不影响安装。
 - 市场索引：<https://mark930209.github.io/GoDSH/market-index.json>（3 条：auto-retry 1.0.2、
@@ -63,7 +66,11 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。
 
 - **2026-11-06 · `dsh-file-tree` 1.1.0 发布**（用户明确要求发版）。
   - 版本 1.0.1 → **1.1.0**（minor：改名 + Git 视图属于新增能力），tag `dsh-file-tree-v1.1.0`
-    指向 `22a14a1`，随后的索引提交为 `4c0812e`。
+    指向 `22a14a1`，随后的索引提交为 `4c0812e`；GitHub Release 已由 CI 建好。
+  - **npm 未发**：`npm publish` 返回 403「Package name too similar to existing package
+    `dsh-filetree`」，npm 建议改用作用域包名 `@guimaxingtian/dsh-file-tree`。待用户定名后补发。
+  - **CI 已知问题**：`Release plugin` 的「Refresh market index」步骤自 2026-11-04 起每次都失败
+    （Release 本身正常），索引一直靠 `release.mjs` 本地刷新，页面索引仍是最新的。
   - `docs/market-index.json` 已刷新：条目从旧名 `dsh-file-tree-context-menu@1.0.1`
     变为 `dsh-file-tree@1.1.0`（旧目录已改名，索引不再收录旧条目，但 npm 旧包仍可安装）。
   - 推 `main` + tag 后由 `release.yml` 建 GitHub Release 并二次刷新索引，`pages.yml` 部署 Pages。
