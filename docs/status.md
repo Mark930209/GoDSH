@@ -223,8 +223,8 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
      解析器维护成本。参考插件 `dsh-llm-text-tools` 的 README 立论已过时，不宜直接引用。
 5. 可选：在 npmjs.com 用 2FA 手动删掉三个包的 `0.0.0-stage` 占位版本，让包页干净。
 6. 计划新插件：`node scripts\new-plugin.mjs dsh-xxx`。
-7. **RTK 接入评估（2026-11-06 调研 + 复测，未动手）** —— 见下节「省 token 工具的调研结论」。
-   **结论：不接入**（真实可用收益只剩 `git log` 一档，招牌能力 `rtk rg` 在本机跑不通）。
+7. **RTK 接入评估（2026-11-06 调研 + 复测，已轻度接入）** —— 见下节「省 token 工具的调研结论」。
+   已把 `rg.exe` 放进 `~/.local/bin` 修好 `rtk rg`；结论是「只在手工终端用 `rtk git log` / `rtk rg`，不写插件」。
 8. **LSP 级代码查询**（同上节），两条路线待选。
 
 ## 省 token 工具的调研结论（2026-11-06）
@@ -255,29 +255,29 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 | 场景 | 原生 | `rtk` | 省 |
 |---|---|---|---|
 | `git log -20` | 16,618 字符 | 6,360 | **62%** |
-| `git log -5` | 4,496 | 1,813 | **60%** |
+| `rtk rg`（docs 搜索 35 条） | 3,034 | 2,321 | **24%** |
 | `git status` | 679 | 616 | 9% |
 | `git diff HEAD~2` | 5,075 | 4,946 | 3%（几乎无用） |
-| 单次调用额外开销 | 53 ms | 110 ms | **+56 ms** |
+| 单次调用额外开销 | 53 ms | 110 ms | **+56 ms**（官方称 <10ms，实测不符） |
 
-- **97% 的历史收益来自一条本机跑不通的命令**。`rtk gain` 累计 19.2M tokens(12.9%)，但按命令拆解，第一名 `rtk rg` 独占 **18.6M / 3,885 次**（29.5%）。而本机 `rtk rg`
-  直接报 `Failed to resolve 'rg' via PATH ... Binary 'rg' not found on PATH` —— 系统没有独立 `rg`（DSH 的 grep 用自带 ripgrep）。
-  **也就是说这个 12.9% 的漂亮数字在本机基本是不可复现的**，真实可用收益只剩 `git log` 这一档。
-- **同样不可用**：`rtk ls`、`rtk wc`、`rtk tree`（都代理到 POSIX 二进制）。本机也没有 `winget`，补 `rg` 得手动装。
-- **可用**：`rtk git log`（60%+）、`rtk find`、`rtk read`、`rtk config`、`rtk gain`；
+- **`rtk rg` 已修好**。它不自己实现搜索，而是转发给系统的 `rg`（ripgrep）再压缩返回结果；本机无 `rg` 在 PATH 上，故首轮实测报
+  `Binary 'rg' not found on PATH`，据此误判「12.9% 不可复现」——**该结论错误**。
+  实际上 ripgrep 就在机器上（Typora 自带 `ripgrep 13.0.0`），已复制到 `~/.local/bin/rg.exe`（该目录本就在 PATH，`rtk.exe` 同在此），
+  从此 `rtk rg` 全局可用，历史 18.6M / 3,885 次的节省量是真实可复现的。
+- **`rtk rg` 的压缩部分来自截断长行**，搜定位够用，但内容不完整。DSH 自身的 `grep` 工具不走 shell，不受此影响，此项主要惠及手工终端操作。
+- **仍不可用**：`rtk ls`、`rtk wc`（需要 POSIX `ls`/`wc`；Git for Windows 的 `usr\bin` 里有，但属 MSYS2 二进制，
+  依赖 `msys-2.0.dll`，单独拷贝跑不起来；整目录入 PATH 又会遮蔽 Windows 自带命令，不划算）。`rtk tree` 与系统 `tree.com` 参数冲突，同样不可用。
+- **可用**：`rtk git log`（60%+）、`rtk rg`（24%，已修）、`rtk find`、`rtk read`、`rtk config`、`rtk gain`；
   另有未验证但可能有用的一组：`rtk test`（只显示失败）、`rtk err`（只显示错误/警告）、`rtk dotnet build|test`、`rtk pnpm`。
 - **噪音问题可解**：每次调用往 stderr 打 `[rtk] No hook installed — run rtk init -g`（77 字符）。
   在 PowerShell 里用 `& rtk git log -3 2>$null` 即可屏蔽（实测 1102 → 1025 字符），不必去跑 `rtk init -g`。
 
-**判断（比首轮更保守）**：RTK 收益集中在「shell 命令输出」，而 DSH 会话的 token 大头是 `read` 读文件与工具结果，RTK 覆盖不到；
-其招牌能力 `rtk rg` 在本机又是坏的。**净收益小，不接入**。真要接，只有一条低风险路径：
-在 AGENTS.md 写一行「`git log` 类命令优先 `rtk git log`」，其余不谈。
+**判断：轻度接入，不写插件。** 值得做的只有两件低成本的事：
 
-**三种接法（若将来要动手，按侵入性排序）**：
+1. `rg.exe` 放进 `~/.local/bin`（已完成）→ `rtk rg` 可用；
+2. `git log` 类命令走 `rtk git log`，省 62%，这是唯一真正值钱的一档。
 
-1. 显式前缀：命令里写 `rtk git log`。零改造，靠自觉。
-2. AGENTS.md 约定：写明「git log / test / build 类命令优先走 `rtk`」。同样靠自觉。
-3. 写 DSH 插件做命令改写：类比 rtk 的 hook，在工具调用前把 `git *` 改写成 `rtk git *`。需确认 `ctx.tools` 是否有 pre-execute 钩子；且只覆盖 shell 一半，原生 fs 工具仍不受益。**不建议**，投入产出不划算。
+**不推荐**写命令改写插件：DSH 的 `read`/`grep`/`glob` 是原生工具不走 shell，插件只能覆盖一半，投入产出不划算。
 
 ### LSP 级代码查询（真正的「快查询 + 省 token」）
 
