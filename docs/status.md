@@ -284,6 +284,83 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 2. 验证有效再考虑自研原生插件；
 3. RTK 最后看：先解决 stderr 噪音与 `ls`/`rg` 缺二进制两个问题，再决定是否值得做命令改写插件。
 
+## codegraph 插件接入记录（2026-11-06，已装）
+
+### 做了什么
+
+装了 [`dsh-plugin-codegraph@0.6.2`](https://github.com/CC19990113/dsh-plugin-codegraph)（MIT，作者 CC ZHAO），
+`plugin_manager install_bundle` + `registry=https://registry.npmjs.org/`（profile 默认 registry 是内网镜像）。
+装完四个行全部热加载为 `active`，**无需重启**：
+
+| 行 id | 模块 | 作用 |
+|---|---|---|
+| `codegraph` | `dsh-plugin-codegraph-service` | 定义 `ctx.codegraph` 能力缝 |
+| `codegraph-sqlite` | `dsh-plugin-codegraph-sqlite` | 只读查询 store |
+| `codegraph-tree-sitter` | `dsh-plugin-codegraph-tree-sitter` | 自建 tree-sitter 索引器 |
+| `codegraph-tool` | `dsh-plugin-codegraph-tool` | `codegraph` / `codegraph_index` 两个工具 |
+
+在 profile `cordis.patch.yml` 末尾加了两个覆盖（安装本身不写这个文件，是手动加的）：
+
+```yaml
+- id: codegraph-tree-sitter
+  name: "dsh-plugin-codegraph-tree-sitter"
+  config: { watch: false, autoIndexOnSession: false }
+- id: codegraph-tool
+  name: "dsh-plugin-codegraph-tool"
+  config: { backgroundIndex: false, updateCheck: false }
+```
+
+改前备份在 `~/.dsh/backups/cordis.patch.yml.20261106-095345`（含 `.package.json`）。
+
+### 关键发现：现有索引是 schema v11，插件只认 v4 —— 不兼容
+
+我此前在对话里说「Cybertron 那个 1.67 GB 的索引可以直接被读」，**这句是错的**，实测推翻：
+
+| 事实 | 证据 |
+|---|---|
+| Cybertron 索引的格式版本 | `SELECT MAX(version) FROM schema_versions` → **11** |
+| 插件 store 支持的版本 | `dsh-plugin-codegraph-sqlite/lib/database.js`：`SUPPORTED_FORMAT_VERSION = 4` |
+| 不匹配时的行为 | 抛 `CODEGRAPH_UNSUPPORTED_FORMAT`，**fail loud，不做兼容读** |
+| 面板接口的实际回答 | `{"ok":false,"message":"这个工作区的索引由旧版本构建，没有状态摘要；先跑一次 codegraph_index 重建"}` |
+
+根因是插件 README 的立论过时了：它声称读写的就是 `@colbymchenry/codegraph` 的 schema v4，
+但本机 CLI 已是 **1.6.1**，写的是 v11（新增 `route`、`component` 等节点类型）。
+插件 0.6.2 停在 v4，落后于 CLI 的格式演进。
+
+**危险点**：`codegraph-tree-sitter` 的 `writeGraph()` 用「同目录临时文件 + rename」**整体替换**
+`.codegraph/codegraph.db`，且**不检查旧文件的格式版本**。所以在 Cybertron 上跑 `/codegraph index`
+会把 1.67 GB 的 v11 索引覆盖成 v4 索引 —— 既丢 `route`/`component` 节点，也可能让 CLI 1.6.1 读不了。
+
+当前已通过 `watch: false` + `autoIndexOnSession: false` 把这条路堵死（实测：仓库内未生成 `.codegraph/`，
+Cybertron 的 db 时间戳仍是 11-05 17:29）。
+
+### 现在的状态与两条可选路线
+
+- **插件现状**：已装、已启用、**空转**（不建索引、不监听、不自动刷）。只对「由它自己建的 v4 索引」有效。
+- **路线 A（插件，只适合新仓库）**：给没有历史索引的工作区建 v4 索引（如本仓库）。安全，但本仓库只有几个插件，
+  收益有限；**绝不能对 Cybertron 用**。
+- **路线 B（MCP，推荐给 Cybertron）**：走 `@deepseek-ai/dsh-mcp-client@0.2.2-rc.1`（与本机 DSH 版本精确对齐），
+  配置 `codegraph serve --mcp`。CLI 自己认 v11，无需重建索引。等价配置：
+
+  ```yaml
+  - id: mcp-codegraph
+    name: '@deepseek-ai/dsh-mcp-client'
+    config:
+      serverName: codegraph
+      transport: stdio
+      command: codegraph
+      args: ['serve', '--mcp']
+  ```
+
+  也可直接用 `dsh-plugin-codegraph-project@0.1.5` 或 `@hyzyn/dsh-codegraph@0.6.20`（后者 peer 显式列了 `^0.2.2-rc.1`）。
+- 两条路线**不要同时开**：会注册两套功能重叠的工具，污染每次请求的工具 schema。
+
+### 待办
+
+- [ ] 决定：路线 A 保留插件但只在特定仓库用，还是 `remove_bundle` 换成路线 B；
+- [ ] 若要保住 Cybertron 的 v11 索引，**任何情况下都别在那个目录跑 `codegraph_index`**；
+- [ ] 可给上游提 issue：插件 `SUPPORTED_FORMAT_VERSION` 需跟进 CLI 1.6.x 的 v11。
+
 ## 恢复记录（2026-11-03 误删事故）
 
 经过与教训见 [repo-layout.md](repo-layout.md#事故复盘2026-11-03-误删插件源文件)。
