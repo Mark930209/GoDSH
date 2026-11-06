@@ -1,7 +1,7 @@
 {
-  "name": "dsh-file-tree-context-menu",
+  "name": "dsh-file-tree",
   "version": "1.0.1",
-  "description": "Right-click files or folders in the workspace file tree and deliverable lists to add them to the conversation, copy paths/links, preview in DSH, open in a terminal, summarize with AI, create/rename/delete entries, or reveal them in the file manager.",
+  "description": "Right-click files or folders in the workspace file tree and deliverable lists to see Git change status, add them to the conversation, copy paths/links, preview in DSH, open in a terminal, summarize with AI, create/rename/delete entries, or reveal them in the file manager.",
   "type": "module",
   "author": "Mark930209 <guimaxingtian@163.com>",
   "license": "MIT",
@@ -25,13 +25,15 @@
     "delete",
     "recycle-bin",
     "multi-select",
+    "git",
+    "git-status",
     "ai"
   ],
-  "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/file-tree-context-menu",
+  "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/dsh-file-tree",
   "repository": {
     "type": "git",
     "url": "https://github.com/Mark930209/GoDSH.git",
-    "directory": "plugins/file-tree-context-menu"
+    "directory": "plugins/dsh-file-tree"
   },
   "scripts": {
     "check": "node --check client.js && node --check index.js"

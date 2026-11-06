@@ -5,10 +5,13 @@
 
 ## 一句话状态
 
-三个插件（`auto-retry` / `composer-skill-picker` / `file-tree-context-menu`）已统一到
-**1.0.1**，包名从 `@local/*` 改为可直接发布的 `dsh-*`，**同时上线了三条分发渠道**：
-git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 desktop profile 以 `link:`
-装在源码目录，三个条目均为 `fiberPhase: active`。
+三个插件（`auto-retry` / `composer-skill-picker` / `dsh-file-tree`）的已发布版本仍统一为
+**1.0.1**，**同时上线了三条分发渠道**：git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。
+本机 desktop profile 以 `link:` 装在源码目录，三个条目均为 `fiberPhase: active`。
+
+> **2026-11-06 工作区变更（未发版）**：原 `file-tree-context-menu` 已改名为 **`dsh-file-tree`**，
+> 并加入 Git 改动着色 / 字母徽标 / 菜单 Git 摘要。版本号仍是 1.0.1，**未 bump、未打新 tag、
+> 未建 Release、未刷新市场索引**；npm 上的新包名尚不存在，市场索引仍指向旧包名。
 `n1n-prompt-tools` 已于 2026-11-06 **整体废弃删除**（从未发版，无 tag / 无 npm 包 / 不在
 市场索引）；它沉淀的缓存与协议知识保留在 `docs/prompt-cache-investigation.md`、
 `docs/dsh-conversation-internals.md`、`docs/text-tool-protocol.md`。
@@ -27,9 +30,10 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 |---|---|---|---|---|
 | `plugins/auto-retry` | `dsh-auto-retry` | 1.0.1 | `auto-retry-v1.0.1`（`fb77d67`） | link，active |
 | `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | 1.0.1 | `composer-skill-picker-v1.0.1`（`e30c3b2`） | link，active |
-| `plugins/file-tree-context-menu` | `dsh-file-tree-context-menu` | 1.0.1 | `file-tree-context-menu-v1.0.1`（`2d3e8e1`） | link，active |
+| `plugins/dsh-file-tree` | `dsh-file-tree`（旧名 `dsh-file-tree-context-menu`） | 1.0.1 | 旧 tag `file-tree-context-menu-v1.0.1`（`2d3e8e1`）；改名后未发新 tag | link 已指向新目录，待重启 |
 
-- 公共 npm：`latest` 均为 `1.0.1`，已实测 `npm i` 三个包可装在干净目录。
+- 公共 npm：三个旧包名的 `latest` 均为 `1.0.1`，已实测 `npm i` 可装在干净目录；
+  `dsh-file-tree` 这个新包名尚未发布。
   npm 包页同时残留一个 `0.0.0-stage` 占位版本（staged publishing 产物，见
   [publishing.md](publishing.md#账号层面的两个坑已踩过)），不影响安装。
 - 市场索引：<https://mark930209.github.io/GoDSH/market-index.json>（实测 200，3 条，均 1.0.1）。
@@ -53,6 +57,16 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 | 验证基线 | DSH `0.2.1-rc.5`，Windows 桌面端 |
 
 ## 已完成（时间线）
+
+- **2026-11-06 · `dsh-file-tree` 改名 + Git 状态（工作区，未发版）**。参考 `dsh-better-sidebar` 的
+  Git 状态实现，给文件树加：
+  - Host 路由 `POST /api/dft.git`：`git status --porcelain=v2 --branch --ahead-behind -z --untracked-files=all`，
+    限工作区路径、15 秒超时、4 MB 输出上限、`GIT_OPTIONAL_LOCKS=0`、`GIT_LITERAL_PATHSPECS=1`；
+  - 客户端共享状态：20 秒轮询，窗口聚焦 / 菜单打开 / 文件操作后刷新；
+  - 行着色 + 右侧字母徽标（`M/A/D/U/R/C/!`），目录按子项聚合；
+  - 菜单顶部显示分支、操作中状态、改动数、ahead/behind，当前文件/目录显示暂存状态。
+  同时把包名/目录/模块 id/locale 命名空间/CSS 前缀/Host 路由从 `file-tree-context-menu` /
+  `ftcm` 统一改为 `dsh-file-tree` / `dft`。**未发版**。
 
 - **2026-11-06 · `n1n-prompt-tools` 废弃删除（用户拍板）**。五组实验（见
   [prompt-cache-investigation.md](prompt-cache-investigation.md)）证明该网关下缓存收益为 0，
@@ -180,7 +194,7 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
   `repo.config.json` 单一配置源；GitHub Pages 托管市场索引。
 - **2026-11-03 · `file-tree-context-menu` 1.0.0**：右键加入对话（引用芯片）、复制 `@` 引用 / 路径 /
   `file://` / Markdown 链接、DSH 内预览、终端打开、AI 总结/解释、新建/重命名/回收站删除、多选批量；
-  移除「打开方式…」。Host 侧有 `POST /api/ftcm.fileops`（工作区根校验）。
+  移除「打开方式…」。Host 侧有 `POST /api/ftcm.fileops`（工作区根校验；现改为 `/api/dft.fileops`）。
 - **2026-11-03 · `composer-skill-picker` 1.0.0**：输入框工具行常驻「技能」下拉框
   （`conversation.input.left`，order 80，样式对齐内置模型选择器）；
   发现 `.dsh/skills`、`.agents/skills`，选中即插入 `/技能名 ` 并交还焦点。
@@ -231,6 +245,7 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 ## 待办
 
 1. **人工冒烟（最有价值）**：重启 DSH 后逐项确认
+   - 文件树 Git 状态：改动文件着色/字母徽标、目录聚合、菜单分支与暂存状态、非 Git 目录不显示；
    - 右键菜单：加入对话芯片、复制链接、DSH 预览、终端、新建/重命名/回收站、多选；
    - 技能下拉框：`E:\5_8U\Cybertron` 会话应列出项目技能，本仓库应显示「当前项目没有技能」；
    - **auto-retry 真实故障**：断网/VPN 触发模型失败 → 应看到「正在重试模型请求（n/6） · Ns」；

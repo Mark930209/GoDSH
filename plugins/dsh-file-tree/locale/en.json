@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "File Tree Context Menu",
+    "description": "Paint the workspace file tree with Git branch/change colors and letter badges; right-click a file or folder to inspect its Git state, add it to the conversation, copy paths/links, preview in DSH, open in a terminal, summarize or explain with AI, create/rename/delete entries, or reveal it in the file manager."
+  }
+}

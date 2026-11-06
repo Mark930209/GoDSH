@@ -37,7 +37,7 @@
   },
   "plugins": [
     {
-      "name": "dsh-file-tree-context-menu",
+      "name": "dsh-file-tree",
       "title": {
         "en": "File Tree Context Menu",
         "zh": "文件树右键菜单"
@@ -48,10 +48,10 @@
       },
       "icon": "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHZpZXdCb3g9IjAgMCA2NCA2NCI+CiAgPHBhdGggZD0iTTkgMTNhNCA0IDAgMCAxIDQtNGgxMS4yYTQgNCAwIDAgMSAzLjIgMS42TDMwLjYgMTVINTFhNCA0IDAgMCAxIDQgNHY2SDl6IiBmaWxsPSIjMjU2M0VCIi8+CiAgPHJlY3QgeD0iOSIgeT0iMjEiIHdpZHRoPSI0NiIgaGVpZ2h0PSIyNyIgcng9IjQiIGZpbGw9IiMzQjgyRjYiLz4KICA8cmVjdCB4PSIyMyIgeT0iMjUiIHdpZHRoPSIzNSIgaGVpZ2h0PSIyOSIgcng9IjQiIGZpbGw9IiNGRkZGRkYiIHN0cm9rZT0iIzFENEVEOCIgc3Ryb2tlLXdpZHRoPSIyIi8+CiAgPHJlY3QgeD0iMjgiIHk9IjMwIiB3aWR0aD0iMjUiIGhlaWdodD0iNCIgcng9IjIiIGZpbGw9IiM5M0M1RkQiLz4KICA8cmVjdCB4PSIyOCIgeT0iMzciIHdpZHRoPSIyNSIgaGVpZ2h0PSI0IiByeD0iMiIgZmlsbD0iIzFENEVEOCIvPgogIDxyZWN0IHg9IjI4IiB5PSI0NCIgd2lkdGg9IjE3IiBoZWlnaHQ9IjQiIHJ4PSIyIiBmaWxsPSIjOTNDNUZEIi8+Cjwvc3ZnPgo=",
       "author": "Mark930209 <guimaxingtian@163.com>",
-      "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/file-tree-context-menu",
+      "homepage": "https://github.com/Mark930209/GoDSH/tree/main/plugins/dsh-file-tree",
       "repository": {
         "url": "https://github.com/Mark930209/GoDSH",
-        "directory": "plugins/file-tree-context-menu"
+        "directory": "plugins/dsh-file-tree"
       },
       "metadata": {
         "category": "productivity",
@@ -80,7 +80,7 @@
             "type": "git",
             "url": "https://github.com/Mark930209/GoDSH",
             "commit": "ed3a315bde1096e4afd1c2ebbf40d3e1b786ee8a",
-            "path": "plugins/file-tree-context-menu"
+            "path": "plugins/dsh-file-tree"
           },
           "engines": {
             "dsh": ">=0.2.1-rc.5"

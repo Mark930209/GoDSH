@@ -12,7 +12,9 @@
  *   - reveal it in the OS file manager, or open a terminal at its folder,
  *   - summarize / explain it with AI by pre-filling a prompt,
  *   - create files/folders, rename, and move entries to the Recycle Bin,
- *   - multi-select rows and batch-add or batch-copy them.
+ *   - multi-select rows and batch-add or batch-copy them,
+ *   - read the workspace's Git status and paint changed rows with branch-aware
+ *     badges and per-path change state in the menu.
  *
  * Open/reveal reuse the core Session Remote (`ctx.remote.session`):
  * `openWorkspacePath({ path, action })` and `workspacePathApplications({ path })`,
@@ -31,14 +33,14 @@
  * (workspace-relative, trailing `/` for folders, quoted on whitespace).
  */
 window.__ModuleLoader__.load({
-  id: 'dsh-file-tree-context-menu',
+  id: 'dsh-file-tree',
   factory(require) {
     const React = require('react');
     const h = React.createElement;
 
     // ---------------------------------------------------------------- locale
     /** Dictionary namespace owned by this plugin. */
-    const NS = 'file-tree-context-menu';
+    const NS = 'dsh-file-tree';
     /** Simplified Chinese dictionary (key-set source of truth). */
     const zh = {
       'menu.label': '文件操作',
@@ -91,7 +93,31 @@ window.__ModuleLoader__.load({
       'status.opened': '已打开',
       'status.openFailed': '打开失败',
       'status.revealFailed': '无法显示位置',
-      'status.unavailable': '当前环境不支持本地打开'
+      'status.unavailable': '当前环境不支持本地打开',
+      'git.tone.modified': '已修改',
+      'git.tone.added': '新增',
+      'git.tone.deleted': '已删除',
+      'git.tone.untracked': '未跟踪',
+      'git.tone.renamed': '已重命名',
+      'git.tone.copied': '已复制',
+      'git.tone.conflict': '有冲突',
+      'git.clean': '工作区干净',
+      'git.changedCount': '{count} 个改动',
+      'git.detached': '游离 HEAD',
+      'git.unknownBranch': '未知分支',
+      'git.ahead': '领先远程 {count} 个提交',
+      'git.behind': '落后远程 {count} 个提交',
+      'git.folder': '文件夹',
+      'git.staged': '已暂存',
+      'git.unstaged': '未暂存',
+      'git.stagedAndUnstaged': '已暂存 + 未暂存',
+      'git.operation.merge': '合并中',
+      'git.operation.rebase': '变基中',
+      'git.operation.cherry-pick': '拣选中',
+      'git.operation.revert': '回退中',
+      'git.operation.bisect': '二分查找中',
+      'git.directoryChanged': '{count} 个文件有改动',
+      'git.entryClean': '无改动'
     };
     /** English dictionary, key-identical to the Chinese source of truth. */
     const en = {
@@ -145,46 +171,99 @@ window.__ModuleLoader__.load({
       'status.opened': 'Opened',
       'status.openFailed': 'Could not open',
       'status.revealFailed': 'Could not show location',
-      'status.unavailable': 'Local opening is unavailable here'
+      'status.unavailable': 'Local opening is unavailable here',
+      'git.tone.modified': 'Modified',
+      'git.tone.added': 'Added',
+      'git.tone.deleted': 'Deleted',
+      'git.tone.untracked': 'Untracked',
+      'git.tone.renamed': 'Renamed',
+      'git.tone.copied': 'Copied',
+      'git.tone.conflict': 'Conflict',
+      'git.clean': 'Working tree clean',
+      'git.changedCount': '{count} changed',
+      'git.detached': 'Detached HEAD',
+      'git.unknownBranch': 'Unknown branch',
+      'git.ahead': '{count} ahead of upstream',
+      'git.behind': '{count} behind upstream',
+      'git.folder': 'folder',
+      'git.staged': 'staged',
+      'git.unstaged': 'unstaged',
+      'git.stagedAndUnstaged': 'staged + unstaged',
+      'git.operation.merge': 'merging',
+      'git.operation.rebase': 'rebasing',
+      'git.operation.cherry-pick': 'cherry-picking',
+      'git.operation.revert': 'reverting',
+      'git.operation.bisect': 'bisecting',
+      'git.directoryChanged': '{count} changed files',
+      'git.entryClean': 'No changes'
     };
 
     // ------------------------------------------------------------------ css
-    const CSS_TAG_ID = 'dsh-file-tree-context-menu/style';
+    const CSS_TAG_ID = 'dsh-file-tree/style';
     const CSS = [
-      '.ftcm-panel{position:fixed;z-index:100000;min-width:196px;padding:4px;',
+      '.dft-panel{position:fixed;z-index:100000;min-width:196px;padding:4px;',
       'box-sizing:border-box;border-radius:8px;background:var(--dsw-alias-bg-overlay);',
       'border:1px solid var(--dsw-alias-border-l2);box-shadow:0 8px 28px rgba(0,0,0,.22);',
       'font-family:var(--dsw-font-family,sans-serif);font-size:13px;}',
-      '.ftcm-item{display:flex;align-items:center;width:100%;height:28px;padding:0 10px;',
+      '.dft-item{display:flex;align-items:center;width:100%;height:28px;padding:0 10px;',
       'border:0;border-radius:6px;background:transparent;color:var(--dsw-alias-label-primary);',
       'font:inherit;text-align:left;cursor:pointer;white-space:nowrap;}',
-      '.ftcm-item:hover{background:var(--dsw-alias-bg-layer-2);}',
-      '.ftcm-item:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px;}',
-      '.ftcm-item[data-state="copied"]{color:var(--dsw-alias-state-success-primary);}',
-      '.ftcm-item[data-state="failed"]{color:var(--dsw-alias-state-error-primary);}',
-      '.ftcm-item:disabled{opacity:.55;cursor:default;}',
-      '.ftcm-item-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;}',
-      '.ftcm-icon{width:16px;height:16px;flex:none;border-radius:3px;object-fit:contain;}',
-      '.ftcm-hint{margin-left:6px;color:var(--dsw-alias-label-tertiary);font-size:11px;}',
-      '.ftcm-note{padding:6px 10px;color:var(--dsw-alias-label-tertiary);font-size:12px;}',
-      '.ftcm-panel{max-height:calc(100vh - 16px);overflow-y:auto;}',
-      '.ftcm-sep{height:1px;margin:4px 6px;background:var(--dsw-alias-border-l1);}',
-      'li[data-ftcm-selected="true"]{background:var(--dsw-alias-bg-layer-2);',
+      '.dft-item:hover{background:var(--dsw-alias-bg-layer-2);}',
+      '.dft-item:focus-visible{outline:2px solid var(--dsw-alias-brand-primary);outline-offset:-2px;}',
+      '.dft-item[data-state="copied"]{color:var(--dsw-alias-state-success-primary);}',
+      '.dft-item[data-state="failed"]{color:var(--dsw-alias-state-error-primary);}',
+      '.dft-item:disabled{opacity:.55;cursor:default;}',
+      '.dft-item-label{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;}',
+      '.dft-icon{width:16px;height:16px;flex:none;border-radius:3px;object-fit:contain;}',
+      '.dft-hint{margin-left:6px;color:var(--dsw-alias-label-tertiary);font-size:11px;}',
+      '.dft-note{padding:6px 10px;color:var(--dsw-alias-label-tertiary);font-size:12px;}',
+      '.dft-panel{max-height:calc(100vh - 16px);overflow-y:auto;}',
+      '.dft-sep{height:1px;margin:4px 6px;background:var(--dsw-alias-border-l1);}',
+      'li[data-dft-selected="true"]{background:var(--dsw-alias-bg-layer-2);',
       'box-shadow:inset 2px 0 0 var(--dsw-alias-brand-primary);}',
-      '.ftcm-form{display:flex;flex-direction:column;gap:8px;padding:8px 10px 10px;min-width:240px;}',
-      '.ftcm-form-title{font-weight:600;color:var(--dsw-alias-label-primary);}',
-      '.ftcm-form-desc{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.5;white-space:normal;}',
-      '.ftcm-input{height:30px;padding:0 8px;border-radius:6px;border:1px solid var(--dsw-alias-border-l2);',
+      '.dft-form{display:flex;flex-direction:column;gap:8px;padding:8px 10px 10px;min-width:240px;}',
+      '.dft-form-title{font-weight:600;color:var(--dsw-alias-label-primary);}',
+      '.dft-form-desc{color:var(--dsw-alias-label-secondary);font-size:12px;line-height:1.5;white-space:normal;}',
+      '.dft-input{height:30px;padding:0 8px;border-radius:6px;border:1px solid var(--dsw-alias-border-l2);',
       'background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;outline:none;box-sizing:border-box;}',
-      '.ftcm-input:focus{border-color:var(--dsw-alias-brand-primary);}',
-      '.ftcm-form-error{color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:1.4;}',
-      '.ftcm-form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:2px;}',
-      '.ftcm-btn{height:28px;padding:0 12px;border-radius:6px;border:1px solid var(--dsw-alias-border-l2);',
+      '.dft-input:focus{border-color:var(--dsw-alias-brand-primary);}',
+      '.dft-form-error{color:var(--dsw-alias-state-error-primary);font-size:12px;line-height:1.4;}',
+      '.dft-form-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:2px;}',
+      '.dft-btn{height:28px;padding:0 12px;border-radius:6px;border:1px solid var(--dsw-alias-border-l2);',
       'background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-primary);font:inherit;cursor:pointer;}',
-      '.ftcm-btn:hover{background:var(--dsw-alias-bg-layer-2);}',
-      '.ftcm-btn-primary{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:#fff;}',
-      '.ftcm-btn-danger{background:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary);color:#fff;}',
-      '.ftcm-btn:disabled{opacity:.55;cursor:default;}'
+      '.dft-btn:hover{background:var(--dsw-alias-bg-layer-2);}',
+      '.dft-btn-primary{background:var(--dsw-alias-brand-primary);border-color:var(--dsw-alias-brand-primary);color:#fff;}',
+      '.dft-btn-danger{background:var(--dsw-alias-state-error-primary);border-color:var(--dsw-alias-state-error-primary);color:#fff;}',
+      '.dft-btn:disabled{opacity:.55;cursor:default;}',
+      '.dft-git-info{display:flex;flex-wrap:wrap;align-items:center;gap:3px 6px;max-width:300px;',
+      'padding:6px 10px;color:var(--dsw-alias-label-secondary);font-size:11px;line-height:1.5;}',
+      '.dft-git-branch{max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;',
+      'color:var(--dsw-alias-label-primary);font-weight:600;}',
+      '.dft-git-clean{color:var(--dsw-alias-state-success-primary);}',
+      '.dft-git-count{color:var(--dsw-alias-label-secondary);}',
+      '.dft-git-chip{padding:0 4px;border-radius:4px;background:var(--dsw-alias-bg-layer-2);',
+      'color:var(--dsw-alias-label-tertiary);font-size:10px;line-height:16px;white-space:nowrap;}',
+      '.dft-git-chip[data-dft-git-tone="modified"]{color:var(--dsw-alias-state-warn-primary);}',
+      '.dft-git-chip[data-dft-git-tone="added"],.dft-git-chip[data-dft-git-tone="untracked"],.dft-git-chip[data-dft-git-tone="copied"]{color:var(--dsw-alias-state-success-primary);}',
+      '.dft-git-chip[data-dft-git-tone="deleted"],.dft-git-chip[data-dft-git-tone="conflict"]{color:var(--dsw-alias-state-error-primary);}',
+      '.dft-git-chip[data-dft-git-tone="renamed"]{color:var(--dsw-alias-state-business-primary);}',
+      '.dft-git-entry{display:flex;align-items:center;gap:6px;padding:0 10px 6px;',
+      'color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:1.5;}',
+      '.dft-git-entry-detail{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+      '.ZaWTnW_name[data-dft-git]{font-weight:500;}',
+      '.ZaWTnW_name[data-dft-git="modified"]{color:var(--dsw-alias-state-warn-primary);}',
+      '.ZaWTnW_name[data-dft-git="added"],.ZaWTnW_name[data-dft-git="untracked"],.ZaWTnW_name[data-dft-git="copied"]{color:var(--dsw-alias-state-success-primary);}',
+      '.ZaWTnW_name[data-dft-git="deleted"],.ZaWTnW_name[data-dft-git="conflict"]{color:var(--dsw-alias-state-error-primary);}',
+      '.ZaWTnW_name[data-dft-git="renamed"]{color:var(--dsw-alias-state-business-primary);}',
+      '.ZaWTnW_name[data-dft-git="conflict"]{font-weight:700;}',
+      '.ZaWTnW_name[data-dft-git]::after{content:attr(data-dft-git-letter);margin-left:4px;',
+      'font-size:9px;font-weight:700;line-height:1;opacity:.9;vertical-align:1px;}',
+      '.ZaWTnW_action[data-dft-git]::after{content:attr(data-dft-git-letter);margin-left:4px;',
+      'font-size:9px;font-weight:700;line-height:1;opacity:.9;flex:none;}',
+      '.ZaWTnW_action[data-dft-git="modified"]::after{color:var(--dsw-alias-state-warn-primary);}',
+      '.ZaWTnW_action[data-dft-git="added"]::after,.ZaWTnW_action[data-dft-git="untracked"]::after,.ZaWTnW_action[data-dft-git="copied"]::after{color:var(--dsw-alias-state-success-primary);}',
+      '.ZaWTnW_action[data-dft-git="deleted"]::after,.ZaWTnW_action[data-dft-git="conflict"]::after{color:var(--dsw-alias-state-error-primary);}',
+      '.ZaWTnW_action[data-dft-git="renamed"]::after{color:var(--dsw-alias-state-business-primary);}'
     ].join('');
 
     /** Insert the plugin stylesheet, preferring the Client `styles` builtin. */
@@ -195,7 +274,7 @@ window.__ModuleLoader__.load({
       const existing = document.querySelector('style[data-plugin-css=' + JSON.stringify(CSS_TAG_ID) + ']');
       if (existing !== null) return () => {};
       const tag = document.createElement('style');
-      tag.dataset.plugin = 'dsh-file-tree-context-menu';
+      tag.dataset.plugin = 'dsh-file-tree';
       tag.dataset.pluginCss = CSS_TAG_ID;
       tag.textContent = css;
       document.head.appendChild(tag);
@@ -222,6 +301,12 @@ window.__ModuleLoader__.load({
 
     function publish() {
       for (const listener of listeners) listener();
+    }
+    /** Repaint the open menu after non-state data (the git reading) changed. */
+    function repaintMenu() {
+      if (state.menu === null) return;
+      state = { menu: state.menu, feedback: state.feedback };
+      publish();
     }
     function subscribe(listener) {
       listeners.add(listener);
@@ -292,8 +377,8 @@ window.__ModuleLoader__.load({
       for (const row of rows) {
         const entry = fileTreeEntry(row);
         if (entry === null) continue;
-        if (isEntrySelected(entry)) row.setAttribute('data-ftcm-selected', 'true');
-        else row.removeAttribute('data-ftcm-selected');
+        if (isEntrySelected(entry)) row.setAttribute('data-dft-selected', 'true');
+        else row.removeAttribute('data-dft-selected');
       }
     }
     /** Drop the whole multi-selection. */
@@ -446,7 +531,7 @@ window.__ModuleLoader__.load({
     }
     /** Root-relative, same-origin URL for the host file-operation route. */
     function fileOpsUrl() {
-      return new URL('api/ftcm.fileops', document.baseURI).href;
+      return new URL('api/dft.fileops', document.baseURI).href;
     }
     /** Call the host-side create/rename/trash/terminal route. */
     async function callFileOp(payload) {
@@ -463,8 +548,326 @@ window.__ModuleLoader__.load({
       }
       return data;
     }
+    // ------------------------------------------------------------------ git
     /**
-     * The `@path` mention text, mirroring the composer file intake's
+     * Git status shared by the row decorations and the menu header: one reading
+     * per workspace root, shared by every consumer, refreshed on a slow timer and
+     * on the events that make it stale (window focus, menu opening, file
+     * operations). A non-repository answer is cached too, so a plain folder never
+     * re-runs discovery on every poll.
+     */
+    const GIT_POLL_MS = 20000;
+    /** Tone → badge letter, used when a directory aggregates several children. */
+    const GIT_DIR_LETTER = { conflict: '!', deleted: 'D', added: 'A', renamed: 'R', copied: 'C', modified: 'M', untracked: 'U' };
+    /** The Path column's tone for one row, or undefined when the row is clean. */
+    const GIT_ROW_TONE = { modified: 'modified', added: 'added', deleted: 'deleted', untracked: 'untracked', renamed: 'renamed', copied: 'copied', conflict: 'conflict' };
+    const gitSnapshots = new Map();
+    const gitPending = new Set();
+    const gitFetchedAt = new Map();
+
+    /** Root-relative, same-origin URL for the host git-status route. */
+    function gitStatusUrl() {
+      return new URL('api/dft.git', document.baseURI).href;
+    }
+    /** Normalize a path for status lookups: slashes, no trailing separator, lower case. */
+    function gitKey(value) {
+      return toSlashes(value).replace(/\/+$/, '').toLowerCase();
+    }
+    /** Directory tint precedence: a mixed folder reports its most serious change. */
+    const GIT_TONE_RANK = { conflict: 7, deleted: 6, modified: 5, renamed: 4, added: 3, copied: 2, untracked: 1 };
+    function mergeGitTone(current, next) {
+      if (current === undefined) return next;
+      if (next === undefined) return current;
+      return (GIT_TONE_RANK[next] || 0) > (GIT_TONE_RANK[current] || 0) ? next : current;
+    }
+    /** Turn one host answer into the lookup tables the decorations read. */
+    function indexGitSnapshot(snapshot) {
+      const files = new Map();
+      const dirs = new Map();
+      for (const entry of Array.isArray(snapshot.entries) ? snapshot.entries : []) {
+        const relative = typeof entry.relative === 'string' ? entry.relative : '';
+        if (relative === '') continue;
+        const key = gitKey(relative);
+        files.set(key, entry);
+        let dir = key;
+        while (dir !== '') {
+          dirs.set(dir, mergeGitTone(dirs.get(dir), entry.tone));
+          const slash = dir.lastIndexOf('/');
+          if (slash <= 0) break;
+          dir = dir.slice(0, slash);
+        }
+      }
+      return {
+        isRepo: snapshot.isRepo === true,
+        branch: snapshot.branch,
+        detached: snapshot.detached === true,
+        operation: snapshot.operation,
+        ahead: typeof snapshot.ahead === 'number' ? snapshot.ahead : 0,
+        behind: typeof snapshot.behind === 'number' ? snapshot.behind : 0,
+        files,
+        dirs
+      };
+    }
+    /** One root's indexed reading, or undefined before the first answer. */
+    function gitContext(root) {
+      if (root === '' || root === undefined || root === null) return undefined;
+      return gitSnapshots.get(gitKey(root));
+    }
+    /** Whether two readings are the same, so an unchanged poll skips a repaint. */
+    function sameGitIndex(left, right) {
+      if (left === right) return true;
+      if (left.isRepo !== right.isRepo || left.branch !== right.branch || left.detached !== right.detached
+        || left.operation !== right.operation || left.ahead !== right.ahead || left.behind !== right.behind) return false;
+      if (left.files.size !== right.files.size || left.dirs.size !== right.dirs.size) return false;
+      for (const [key, value] of left.files) {
+        const other = right.files.get(key);
+        if (other === undefined || other.tone !== value.tone || other.letter !== value.letter || other.staged !== value.staged || other.unstaged !== value.unstaged) return false;
+      }
+      for (const [key, value] of left.dirs) {
+        if (right.dirs.get(key) !== value) return false;
+      }
+      return true;
+    }
+    /** Read one root's git status; a second call while one is in flight is ignored. */
+    async function refreshGitStatus(root, force) {
+      if (root === '' || root === undefined || root === null) return;
+      const key = gitKey(root);
+      if (gitPending.has(key)) return;
+      if (force !== true && Date.now() - (gitFetchedAt.get(key) || 0) < 3000) return;
+      gitPending.add(key);
+      try {
+        const response = await fetch(gitStatusUrl(), {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ root })
+        });
+        const data = await response.json();
+        if (data !== null && data.ok === true && data.isRepo === false) {
+          const next = { isRepo: false, branch: null, detached: false, operation: null, files: new Map(), dirs: new Map() };
+          const previous = gitSnapshots.get(key);
+          if (previous === undefined || previous.isRepo !== false) {
+            gitSnapshots.set(key, next);
+            syncGitDom();
+            repaintMenu();
+          }
+          return;
+        }
+        if (!response.ok || data === null || data.ok !== true || data.isRepo !== true) {
+          if (gitSnapshots.has(key)) {
+            gitSnapshots.delete(key);
+            syncGitDom();
+            repaintMenu();
+          }
+          return;
+        }
+        const entries = (Array.isArray(data.entries) ? data.entries : [])
+          .map((entry) => {
+            if (entry === null || typeof entry.absolute !== 'string' || typeof entry.tone !== 'string') return null;
+            const relative = relativeOf(root, entry.absolute);
+            if (relative === '') return null;
+            return {
+              relative,
+              tone: entry.tone,
+              letter: typeof entry.letter === 'string' ? entry.letter : '',
+              staged: entry.staged === true,
+              unstaged: entry.unstaged === true
+            };
+          })
+          .filter((entry) => entry !== null);
+        const next = indexGitSnapshot({ ...data, entries });
+        const previous = gitSnapshots.get(key);
+        if (previous !== undefined && sameGitIndex(previous, next)) return;
+        gitSnapshots.set(key, next);
+        syncGitDom();
+        repaintMenu();
+      } catch (error) {
+        warn('git status failed', error);
+      } finally {
+        gitPending.delete(key);
+        gitFetchedAt.set(key, Date.now());
+      }
+    }
+    /** Decorate one file-tree row from the current reading. */
+    function paintGitRow(row, root, path, kind) {
+      const context = gitContext(root);
+      const relative = relativeOf(root, path);
+      let tone;
+      let letter;
+      if (context !== undefined && context.isRepo && relative !== '') {
+        if (kind === 'directory') {
+          tone = context.dirs.get(gitKey(relative));
+          if (tone !== undefined) letter = GIT_DIR_LETTER[tone] === undefined ? GIT_DIR_LETTER.modified : GIT_DIR_LETTER[tone];
+        } else {
+          const entry = context.files.get(gitKey(relative));
+          if (entry !== undefined && GIT_ROW_TONE[entry.tone] !== undefined) {
+            tone = entry.tone;
+            letter = entry.letter;
+          }
+        }
+      }
+      if (tone === undefined) {
+        row.removeAttribute('data-dft-git');
+        for (const stale of Array.from(row.querySelectorAll('[data-dft-git-owner="1"]'))) {
+          stale.removeAttribute('data-dft-git');
+          stale.removeAttribute('data-dft-git-letter');
+          stale.removeAttribute('data-dft-git-owner');
+          stale.removeAttribute('title');
+          stale.removeAttribute('aria-label');
+        }
+        return;
+      }
+      row.setAttribute('data-dft-git', tone);
+      const text = typeof letter === 'string' && letter !== '' ? letter : (GIT_DIR_LETTER[tone] || '•');
+      const title = t('git.tone.' + tone) + (kind === 'directory' ? ' · ' + t('git.folder') : '');
+      const name = row.querySelector('.ZaWTnW_name');
+      if (name !== null) {
+        name.setAttribute('data-dft-git', tone);
+        name.setAttribute('data-dft-git-owner', '1');
+        name.setAttribute('title', title);
+      }
+      // Put the letter after the name inside the row's action button. The
+      // accessory cell is display:none while empty, and a pseudo-element would
+      // not make it non-empty; the button is always rendered and visible.
+      const action = row.querySelector('.ZaWTnW_action');
+      const badge = action !== null ? action : name;
+      if (badge !== null) {
+        badge.setAttribute('data-dft-git', tone);
+        badge.setAttribute('data-dft-git-letter', text);
+        badge.setAttribute('data-dft-git-owner', '1');
+        badge.setAttribute('title', title);
+      }
+    }
+    /**
+     * Mirror the current reading onto the live tree. The badge rides the native
+     * name cell as an attribute and a pseudo-element, so no React child is ever
+     * inserted into the file tree.
+     */
+    function syncGitDom() {
+      const rows = document.querySelectorAll('li[data-files-entry][data-files-path]');
+      for (const entry of Array.from(rows)) {
+        const container = entry.closest('[data-files-root]');
+        if (container === null) continue;
+        const root = container.getAttribute('data-files-root') || '';
+        if (root === '') continue;
+        paintGitRow(entry, root, entry.getAttribute('data-files-path') || '', entry.getAttribute('data-files-entry') || 'file');
+      }
+    }
+    /** The tree roots currently on screen, deduplicated. */
+    function visibleTreeRoots() {
+      const roots = new Set();
+      for (const container of Array.from(document.querySelectorAll('[data-files-root]'))) {
+        const root = container.getAttribute('data-files-root') || '';
+        if (root !== '') roots.add(root);
+      }
+      return Array.from(roots);
+    }
+    /** Re-read every visible root; called on focus, on menu open, and by the timer. */
+    function refreshVisibleGit() {
+      for (const root of visibleTreeRoots()) void refreshGitStatus(root);
+    }
+    /** Start the slow poll and the focus-driven refresh; returns the teardown. */
+    function startGitWatcher() {
+      if (typeof window === 'undefined') return () => {};
+      const onFocus = () => refreshVisibleGit();
+      window.addEventListener('focus', onFocus);
+      let scheduled = null;
+      const observer = typeof MutationObserver === 'function' ? new MutationObserver(() => {
+        if (scheduled !== null) return;
+        scheduled = window.setTimeout(() => {
+          scheduled = null;
+          syncGitDom();
+          refreshVisibleGit();
+        }, 180);
+      }) : null;
+      if (observer !== null && document.body !== null) observer.observe(document.body, { childList: true, subtree: true });
+      const timer = window.setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        syncGitDom();
+        refreshVisibleGit();
+      }, GIT_POLL_MS);
+      syncGitDom();
+      refreshVisibleGit();
+      return () => {
+        window.removeEventListener('focus', onFocus);
+        window.clearInterval(timer);
+        if (scheduled !== null) window.clearTimeout(scheduled);
+        if (observer !== null) observer.disconnect();
+      };
+    }
+    /**
+     * The git block above the actions: the branch (or the operation in progress),
+     * how many paths changed, and a per-tone count.
+     */
+    function gitInfoNode(root) {
+      const context = gitContext(root);
+      if (context === undefined || !context.isRepo) return null;
+      const counts = new Map();
+      for (const entry of context.files.values()) counts.set(entry.tone, (counts.get(entry.tone) || 0) + 1);
+      const branchName = context.detached
+        ? t('git.detached')
+        : (typeof context.branch === 'string' && context.branch !== '' ? context.branch : t('git.unknownBranch'));
+      const head = context.operation !== null && context.operation !== undefined
+        ? branchName + ' · ' + t('git.operation.' + context.operation, {})
+        : branchName;
+      const changed = context.files.size;
+      const children = [
+        h('span', { key: 'branch', className: 'dft-git-branch', title: head }, head),
+        changed === 0
+          ? h('span', { key: 'count', className: 'dft-git-clean' }, t('git.clean'))
+          : h('span', { key: 'count', className: 'dft-git-count' }, t('git.changedCount', { count: changed }))
+      ];
+      if (context.ahead > 0) children.push(h('span', { key: 'ahead', className: 'dft-git-count', title: t('git.ahead', { count: context.ahead }) }, '↑' + context.ahead));
+      if (context.behind > 0) children.push(h('span', { key: 'behind', className: 'dft-git-count', title: t('git.behind', { count: context.behind }) }, '↓' + context.behind));
+      const order = ['conflict', 'deleted', 'renamed', 'modified', 'added', 'untracked', 'copied'];
+      for (const tone of order) {
+        const value = counts.get(tone) || 0;
+        if (value === 0) continue;
+        const label = t('git.tone.' + tone) + ' ' + value;
+        children.push(h('span', {
+          key: 'tone-' + tone,
+          className: 'dft-git-chip',
+          'data-dft-git-tone': tone,
+          title: label
+        }, label));
+      }
+      return h('div', { key: 'git', className: 'dft-git-info', role: 'none' }, children);
+    }
+    /** The selected path's own git state, under the branch summary. */
+    function gitEntryNode(root, path, kind) {
+      const context = gitContext(root);
+      if (context === undefined || !context.isRepo) return null;
+      const relative = relativeOf(root, path);
+      if (relative === '') return null;
+      const key = gitKey(relative);
+      if (kind === 'directory') {
+        const tone = context.dirs.get(key);
+        if (tone === undefined) return null;
+        let count = 0;
+        for (const entryKey of context.files.keys()) {
+          if (entryKey === key || entryKey.startsWith(key + '/')) count += 1;
+        }
+        return h('div', { key: 'git-entry', className: 'dft-git-entry', role: 'none' }, [
+          h('span', { key: 'tone', className: 'dft-git-chip', 'data-dft-git-tone': tone }, t('git.tone.' + tone)),
+          h('span', { key: 'detail', className: 'dft-git-entry-detail' }, t('git.directoryChanged', { count: Math.max(1, count) }))
+        ]);
+      }
+      const entry = context.files.get(key);
+      if (entry === undefined) {
+        return h('div', { key: 'git-entry', className: 'dft-git-entry', role: 'none' }, t('git.entryClean'));
+      }
+      const parts = [t('git.tone.' + entry.tone)];
+      if (entry.tone !== 'untracked' && entry.staged === true && entry.unstaged === true) parts.push(t('git.stagedAndUnstaged'));
+      else if (entry.tone !== 'untracked' && entry.staged === true) parts.push(t('git.staged'));
+      else if (entry.tone !== 'untracked' && entry.unstaged === true) parts.push(t('git.unstaged'));
+      return h('div', { key: 'git-entry', className: 'dft-git-entry', role: 'none' }, [
+        h('span', { key: 'tone', className: 'dft-git-chip', 'data-dft-git-tone': entry.tone }, parts[0]),
+        parts.length > 1 ? h('span', { key: 'detail', className: 'dft-git-entry-detail' }, parts.slice(1).join(' · ')) : null
+      ]);
+    }
+
+    /**
+     * The \`@path\` mention text, mirroring the composer file intake's
      * `formatFileMention` grammar: workspace-relative, a trailing `/` for
      * folders, quoted as a whole when it contains whitespace.
      * @returns the mention, or undefined when the grammar cannot express it.
@@ -706,6 +1109,7 @@ window.__ModuleLoader__.load({
         }
         clearSelection();
         closeMenu();
+        void refreshGitStatus(prompt.root, true);
       } catch (error) {
         setBusy(false);
         setPromptError(String(error && error.message ? error.message : error));
@@ -742,7 +1146,7 @@ window.__ModuleLoader__.load({
      * Console diagnostics for the chip-insert route; keeps fallbacks explainable.
      */
     function warn(reason, detail) {
-      console.warn('[file-tree-context-menu] ' + reason, detail === undefined ? '' : detail);
+      console.warn('[dsh-file-tree] ' + reason, detail === undefined ? '' : detail);
     }
 
     /** Resolve the client `sessions` service from the plugin context. */
@@ -896,6 +1300,20 @@ window.__ModuleLoader__.load({
       const panelRef = React.useRef(null);
       const menuState = current.menu;
       const open = menuState !== null;
+      const gitMenuRoot = open && menuState !== null
+        ? (Array.isArray(menuState.multi)
+          ? (menuState.multi.length > 0 && menuState.multi.every((entry) => gitKey(entry.root) === gitKey(menuState.multi[0].root))
+            ? menuState.multi[0].root
+            : null)
+          : menuState.root)
+        : null;
+
+      // Refresh the branch/changed-path reading whenever the menu opens; the
+      // visible tree also polls on its own, but the menu should never show a
+      // reading older than the right-click that opened it.
+      React.useEffect(() => {
+        if (gitMenuRoot !== null) void refreshGitStatus(gitMenuRoot, true);
+      }, [open, gitMenuRoot]);
 
       // Place the measured panel inside the viewport, then focus the first row.
       const [position, setPosition] = React.useState({ left: -9999, top: -9999 });
@@ -911,7 +1329,7 @@ window.__ModuleLoader__.load({
         });
         const promptMode = menuState.view === 'prompt' && menuState.prompt !== null ? menuState.prompt.mode : null;
         const input = panel !== null && promptMode !== null && promptMode !== 'delete'
-          ? panel.querySelector('input.ftcm-input')
+          ? panel.querySelector('input.dft-input')
           : null;
         if (input !== null) {
           input.focus();
@@ -968,24 +1386,24 @@ window.__ModuleLoader__.load({
           : label;
         const children = [];
         if (options !== undefined && typeof options.icon === 'string' && options.icon.startsWith('data:')) {
-          children.push(h('img', { key: 'icon', className: 'ftcm-icon', src: options.icon, alt: '' }));
+          children.push(h('img', { key: 'icon', className: 'dft-icon', src: options.icon, alt: '' }));
         }
-        children.push(h('span', { key: 'label', className: 'ftcm-item-label' }, text));
+        children.push(h('span', { key: 'label', className: 'dft-item-label' }, text));
         if (options !== undefined && typeof options.hint === 'string' && options.hint !== '') {
-          children.push(h('span', { key: 'hint', className: 'ftcm-hint' }, options.hint));
+          children.push(h('span', { key: 'hint', className: 'dft-hint' }, options.hint));
         }
         return h('button', {
           key,
           type: 'button',
           role: 'menuitem',
-          className: 'ftcm-item',
+          className: 'dft-item',
           disabled: options !== undefined && options.disabled === true ? true : undefined,
           'data-state': mine ? (current.feedback.ok ? 'copied' : 'failed') : undefined,
           onClick: run
         }, children);
       };
 
-      const note = (key, text) => h('div', { key, className: 'ftcm-note', role: 'none' }, text);
+      const note = (key, text) => h('div', { key, className: 'dft-note', role: 'none' }, text);
 
       const onKeyDown = (event) => {
         if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') return;
@@ -1003,7 +1421,7 @@ window.__ModuleLoader__.load({
         ref: panelRef,
         role: 'menu',
         'aria-label': t('menu.label'),
-        className: 'ftcm-panel',
+        className: 'dft-panel',
         style: { left: position.left, top: position.top },
         onKeyDown
       }, children);
@@ -1016,14 +1434,14 @@ window.__ModuleLoader__.load({
           if (event !== undefined && event !== null) event.preventDefault();
           void submitPrompt();
         };
-        const fields = [h('div', { key: 'title', className: 'ftcm-form-title' }, prompt.title)];
+        const fields = [h('div', { key: 'title', className: 'dft-form-title' }, prompt.title)];
         if (typeof prompt.desc === 'string' && prompt.desc !== '') {
-          fields.push(h('div', { key: 'desc', className: 'ftcm-form-desc' }, prompt.desc));
+          fields.push(h('div', { key: 'desc', className: 'dft-form-desc' }, prompt.desc));
         }
         if (prompt.mode !== 'delete') {
           fields.push(h('input', {
             key: 'input',
-            className: 'ftcm-input',
+            className: 'dft-input',
             value: prompt.value === undefined ? '' : prompt.value,
             placeholder: t('form.namePlaceholder'),
             onChange: (event) => setPromptValue(event.target.value),
@@ -1036,13 +1454,13 @@ window.__ModuleLoader__.load({
           }));
         }
         if (typeof prompt.error === 'string' && prompt.error !== '') {
-          fields.push(h('div', { key: 'error', className: 'ftcm-form-error' }, prompt.error));
+          fields.push(h('div', { key: 'error', className: 'dft-form-error' }, prompt.error));
         }
-        fields.push(h('div', { key: 'actions', className: 'ftcm-form-actions' }, [
-          h('button', { key: 'cancel', type: 'button', className: 'ftcm-btn', disabled: prompt.busy === true, onClick: closeMenu }, t('form.cancel')),
-          h('button', { key: 'ok', type: 'submit', className: 'ftcm-btn ' + (prompt.mode === 'delete' ? 'ftcm-btn-danger' : 'ftcm-btn-primary'), disabled: prompt.busy === true }, prompt.mode === 'delete' ? t('form.deleteTitle') : t('form.confirm'))
+        fields.push(h('div', { key: 'actions', className: 'dft-form-actions' }, [
+          h('button', { key: 'cancel', type: 'button', className: 'dft-btn', disabled: prompt.busy === true, onClick: closeMenu }, t('form.cancel')),
+          h('button', { key: 'ok', type: 'submit', className: 'dft-btn ' + (prompt.mode === 'delete' ? 'dft-btn-danger' : 'dft-btn-primary'), disabled: prompt.busy === true }, prompt.mode === 'delete' ? t('form.deleteTitle') : t('form.confirm'))
         ]));
-        return panel([h('form', { key: 'form', className: 'ftcm-form', onSubmit: submit }, fields)]);
+        return panel([h('form', { key: 'form', className: 'dft-form', onSubmit: submit }, fields)]);
       }
 
       // Multi-selection menu: batch add and copy actions.
@@ -1052,30 +1470,42 @@ window.__ModuleLoader__.load({
         const mentions = entries
           .map((entry) => mentionOf(entry.kind, relativeOf(entry.root, entry.path)))
           .filter((mention) => mention !== undefined);
+        const multiGit = gitMenuRoot === null ? null : gitInfoNode(gitMenuRoot);
         return panel([
+          ...(multiGit === null ? [] : [multiGit, h('div', { key: 'sep-git', role: 'separator', className: 'dft-sep' })]),
           note('multi-count', t('menu.selectedCount', { count })),
           item('multiAdd', t('menu.addSelected', { count }), () => runAddMany(entries)),
           item('multiCopy', t('menu.copySelected'), () => runCopy('multiCopy', entries.map((entry) => absoluteOf(entry.root, entry.path)).join('\n'))),
           item('multiMention', t('menu.copyMention'), () => runCopy('multiMention', mentions.join(' '))),
-          h('div', { key: 'sep-multi', role: 'separator', className: 'ftcm-sep' }),
+          h('div', { key: 'sep-multi', role: 'separator', className: 'dft-sep' }),
           item('clearSelection', t('menu.clearSelection'), () => { clearSelection(); closeMenu(); })
         ]);
       }
 
+      const gitNodes = [];
+      if (!Array.isArray(menuState.multi)) {
+        const summary = gitInfoNode(menuState.root);
+        if (summary !== null) gitNodes.push(summary);
+        const entry = gitEntryNode(menuState.root, menuState.path, kind);
+        if (entry !== null) gitNodes.push(entry);
+        if (gitNodes.length > 0) gitNodes.push(h('div', { key: 'sep-git', role: 'separator', className: 'dft-sep' }));
+      }
+
       const children = [
+        ...gitNodes,
         item('add', t('menu.add'), () => runAdd(kind, relative, mention)),
         item('mention', t('menu.copyMention'), () => runCopy('mention', mention))
       ];
 
       // AI actions need a valid file mention, so folders are excluded.
       if (!isDirectory && mention !== undefined) {
-        children.push(h('div', { key: 'sep-ai', role: 'separator', className: 'ftcm-sep' }));
+        children.push(h('div', { key: 'sep-ai', role: 'separator', className: 'dft-sep' }));
         children.push(item('aiSummary', t('menu.aiSummary'), () => runAsk(kind, relative, mention, t('ai.summaryPrompt'))));
         children.push(item('aiExplain', t('menu.aiExplain'), () => runAsk(kind, relative, mention, t('ai.explainPrompt'))));
       }
 
       if (canUseDesktop) {
-        children.push(h('div', { key: 'sep-open', role: 'separator', className: 'ftcm-sep' }));
+        children.push(h('div', { key: 'sep-open', role: 'separator', className: 'dft-sep' }));
         if (!isDirectory) {
           children.push(item('preview', t('menu.preview'), () => runPreview(menuState.root, menuState.path)));
         }
@@ -1087,19 +1517,18 @@ window.__ModuleLoader__.load({
         children.push(item('terminal', isDirectory ? t('menu.terminal') : t('menu.terminalHere'), () => runTerminal(menuState.root, menuState.path, isDirectory)));
       }
 
-      children.push(h('div', { key: 'sep-file', role: 'separator', className: 'ftcm-sep' }));
+      children.push(h('div', { key: 'sep-file', role: 'separator', className: 'dft-sep' }));
       children.push(item('newFile', t('menu.newFile'), () => openFilePrompt('newFile', menuState.root, menuState.path, kind)));
       children.push(item('newFolder', t('menu.newFolder'), () => openFilePrompt('newFolder', menuState.root, menuState.path, kind)));
       children.push(item('rename', t('menu.rename'), () => openFilePrompt('rename', menuState.root, menuState.path, kind)));
       children.push(item('delete', t('menu.delete'), () => openFilePrompt('delete', menuState.root, menuState.path, kind)));
 
-      children.push(h('div', { key: 'sep-copy', role: 'separator', className: 'ftcm-sep' }));
+      children.push(h('div', { key: 'sep-copy', role: 'separator', className: 'dft-sep' }));
       children.push(item('fileUrl', t('menu.copyFileUrl'), () => runCopy('fileUrl', fileUrlOf(absolute))));
       children.push(item('markdown', t('menu.copyMarkdown'), () => runCopy('markdown', markdownLinkOf(kind, relative, absolute, displayName))));
       children.push(item('absolute', t('menu.copyAbsolute'), () => runCopy('absolute', absolute)));
       children.push(item('relative', t('menu.copyRelative'), () => runCopy('relative', relative)));
       children.push(item('name', t('menu.copyName'), () => runCopy('name', displayName)));
-      return panel(children);
       return panel(children);
     }
 
@@ -1114,11 +1543,12 @@ window.__ModuleLoader__.load({
      */
     function apply(ctx) {
       pluginCtx = ctx;
-      ctx.effect(() => insertCss(CSS), 'file-tree-context-menu: stylesheet');
+      ctx.effect(() => insertCss(CSS), 'dsh-file-tree: stylesheet');
       if (ctx.locale) {
-        ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'file-tree-context-menu: dictionaries');
+        ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-file-tree: dictionaries');
         t = ctx.locale.bind(NS);
       }
+      ctx.effect(startGitWatcher, 'dsh-file-tree: git status watcher');
       // Discover whether this deployment can hand paths to the desktop before
       // deciding to show the open/reveal group.
       loadDesktopAvailability();
@@ -1193,14 +1623,14 @@ window.__ModuleLoader__.load({
       };
       document.addEventListener('contextmenu', onContextMenu, true);
       ctx.effect(() => () => document.removeEventListener('contextmenu', onContextMenu, true),
-        'file-tree-context-menu: listener');
+        'dsh-file-tree: listener');
 
       // Ctrl/Cmd-click toggles, Shift-click selects a visible range. A plain
       // click anywhere clears the selection and keeps the tree's own behavior.
       const onRowClick = (event) => {
         const target = event.target;
         if (!(target instanceof Element)) return;
-        if (target.closest('.ftcm-panel') !== null) return;
+        if (target.closest('.dft-panel') !== null) return;
         const row = target.closest('li[data-files-entry][data-files-path]');
         if (row === null) {
           if (selection.length > 0) clearSelection();
@@ -1224,12 +1654,12 @@ window.__ModuleLoader__.load({
       };
       document.addEventListener('click', onRowClick, true);
       ctx.effect(() => () => document.removeEventListener('click', onRowClick, true),
-        'file-tree-context-menu: selection click');
-      ctx.effect(installSelectionObserver, 'file-tree-context-menu: selection observer');
+        'dsh-file-tree: selection click');
+      ctx.effect(installSelectionObserver, 'dsh-file-tree: selection observer');
 
       // Invisible bridges that capture the composer's InputActions from the
       // standard provide channel, from the file tab and from the composer row.
-      const registration = (name, component, order) => () => ctx.slots.register({ name, id: 'file-tree-context-menu', order }, component);
+      const registration = (name, component, order) => () => ctx.slots.register({ name, id: 'dsh-file-tree', order }, component);
       ctx.slots.inject('sidebar.right.tab.files.actions', registration('sidebar.right.tab.files.actions', ComposerBridge, 90));
       ctx.slots.inject('conversation.input.left', registration('conversation.input.left', ComposerBridge, 90));
       ctx.slots.inject('shell.overlay', registration('shell.overlay', FileTreeContextMenu, 60));

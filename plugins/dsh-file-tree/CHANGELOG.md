@@ -3,6 +3,23 @@
 本文件记录所有值得注意的变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 **版本策略：只有用户明确要求发版时才 bump / 打 tag / 建 Release。**
 
+## [Unreleased]
+
+### Added
+
+- 文件树 Git 状态：Host 读取 `git status --porcelain=v2 --branch --ahead-behind -z --untracked-files=all`，
+  客户端给已修改 / 新增 / 已删除 / 未跟踪 / 重命名 / 已复制 / 冲突的行着色并加字母徽标，
+  目录按子项聚合；菜单顶部显示分支（或游离 HEAD / 合并、变基、拣选等操作）、改动数、
+  领先/落后远程的提交数，以及当前文件/目录的暂存状态。
+- 刷新策略：窗口聚焦、菜单打开、文件操作后立即刷新，平时 20 秒轮询；非 Git 仓库静默不显示。
+- 新增 Host 路由 `POST /api/dft.git`；Git 调用带 15 秒超时、4 MB 输出上限，并设置 `GIT_OPTIONAL_LOCKS=0` 与 `GIT_LITERAL_PATHSPECS=1`。
+
+### Changed
+
+- 包名与目录从 `dsh-file-tree-context-menu` 重命名为 **`dsh-file-tree`**；
+  模块 id、locale 命名空间、CSS 前缀、Host 路由与 `cordis.patch.yml` 同步更新。
+- 本版本未发版、未 bump 版本号、未刷新市场索引。
+
 ## [1.0.1] - 2026-11-04
 
 ### Changed
@@ -18,7 +35,7 @@
 - 复制 `file://` 链接与 Markdown 链接。
 - 在 DSH 右侧面板中预览文件（`sidebarRight.openResource`）。
 - 用 AI 总结 / 用 AI 解释：把文件引用与现成提问填入输入框，按 Enter 即发送。
-- 新建文件、新建文件夹、重命名、删除（移到 Windows 回收站），由 Host 路由 `POST /api/ftcm.fileops` 处理。
+- 新建文件、新建文件夹、重命名、删除（移到 Windows 回收站），由当时的 Host 路由 `POST /api/ftcm.fileops` 处理（现已改为 `/api/dft.fileops`）。
 - 在终端中打开当前文件夹（或文件所在目录）。
 - 多选：Ctrl/Cmd 点选、Shift 连选，批量加入对话或复制路径；普通单击清空选择。
 - 本机打开能力（复用 Session Remote `openWorkspacePath` / `workspacePathApplications`）：

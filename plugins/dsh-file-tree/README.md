@@ -1,9 +1,12 @@
-# File Tree Context Menu · 文件树右键菜单
+# dsh-file-tree · 文件树右键菜单
 
-给 DeepSeek Harness Web UI 的工作区**文件树**与**交付物列表**加右键菜单：
+给 DeepSeek Harness Web UI 的工作区**文件树**与**交付物列表**加右键菜单，并在文件树上显示 Git 改动状态：
 
-| 菜单项 | 行为 |
+| 菜单项 / 状态 | 行为 |
 |---|---|
+| Git 改动着色 | 读取工作区的 `git status --porcelain=v2 --branch --ahead-behind -z --untracked-files=all`，按状态给文件名着色：已修改=橙、新增/未跟踪/已复制=绿、已删除/冲突=红、重命名=蓝；目录按子项聚合，混合时取最严重的一种 |
+| Git 字母徽标 | 行右侧显示 `M/A/D/U/R/C/!` 小徽标；冲突加粗，悬停可看状态说明 |
+| 菜单 Git 摘要 | 菜单顶部显示分支（或游离 HEAD / 合并、变基等操作）和改动数量、领先/落后远程的提交数，以及当前文件/目录的暂存状态 |
 | 加入对话 | 在输入框光标处插入**引用芯片**（与内置 `@` 选文件一致）；芯片不可用时回退为 `@路径` 纯文本并提示「已插入文本（非芯片）」 |
 | 复制 @ 引用 | 复制 `@相对路径`（与引用芯片的剪贴板格式一致，可直接粘贴进对话） |
 | 用 AI 总结 / 用 AI 解释 | 把文件引用和现成提问填入输入框（不自动发送，按 Enter 即用） |
@@ -24,7 +27,8 @@
 | 清空选择 | 清除多选高亮 |
 
 > 本机打开/预览/终端依赖 DSH 桌面端能力；纯 Web 部署会隐藏相应分组。
-> 文件操作走本 bundle 的 Host 路由 `POST /api/ftcm.fileops`，所有路径都校验在会话工作区根目录内。
+> 文件操作走 Host 路由 `POST /api/dft.fileops`，Git 状态走 `POST /api/dft.git`；
+> 文件操作严格限制在传入的工作区根目录内，Git 路由只读取传入的绝对目录，并带 15 秒超时和 4 MB 输出上限。
 
 支持右键的位置：文件树行、交付文件卡片、`已编辑 N 个文件` 改动卡片、审阅侧边栏的文件选择按钮。
 （限制：审阅页的**下拉菜单项**本身不携带路径信息，不在支持范围。）
@@ -32,7 +36,7 @@
 ## 多选怎么用
 
 1. 在文件树里按住 `Ctrl`（macOS 为 `Cmd`）点击多个文件/文件夹；或点第一个后按住 `Shift` 点最后一个做连选。
-2. 在任意一个已选行上右键，菜单顶部会显示「已选 N 项」。
+2. 在任意一个已选行上右键，菜单顶部会显示「已选 N 项」；所选行都在同一工作区时，还会显示该工作区的 Git 分支与改动摘要。
 3. 选「加入对话（N 项）」即可批量插入引用芯片；「复制已选路径」复制绝对路径（每行一个）。
 
 普通单击任意位置会清空选择，不影响文件树原本的打开/展开行为。
@@ -49,25 +53,26 @@ install_bundle  target = <本目录绝对路径>
 方式二（从 Git 安装，推荐给其他机器）：
 
 ```
-git+https://github.com/Mark930209/GoDSH.git#<40位commit>&path:/plugins/file-tree-context-menu
+git+https://github.com/Mark930209/GoDSH.git#<40位commit>&path:/plugins/dsh-file-tree
 ```
 
-方式三（从 npm 安装，需先发布）：`包名@版本`。
+方式三（从 npm 安装，需先发布）：`dsh-file-tree@1.0.1`；**新包名尚未发布**，发布前请用旧名 `dsh-file-tree-context-menu@1.0.1`（不含 Git 状态功能）或方式一/二。
 
 > **改动生效**：本 bundle 以 `link:` 方式安装，修改 `client.js` / `index.js` 后**重启 DeepSeek Harness** 即可加载新代码
 > （替换已安装的包必须重启才会加载新一代 JS 模块，仅刷新页面不一定够）。
 
 ## 版本策略
 
-- 当前版本固定为 **1.0.0**；**只有用户明确要求发版时才 bump 版本、打 tag、建 Release**。
+- 当前包版本为 **1.0.1**；**只有用户明确要求发版时才 bump 版本、打 tag、建 Release、刷新市场索引**。
 - 日常修改只提交代码，不发版、不改版本号。
+- 插件包已从 `dsh-file-tree-context-menu` 重命名为 **`dsh-file-tree`**；该改名与 Git 状态功能仍在开发分支中，未作为新版本发布。
 - 早先的 1.1.0 / 1.2.0 编号已废弃，相关 tag 与 Release 已清理。
 
 ## 目录结构
 
 ```
-client.js              客户端插件（右键菜单、多选、表单、引用插入）
-index.js               Host 半部（POST /api/ftcm.fileops：新建/重命名/回收站/终端）
+client.js              客户端插件（右键菜单、多选、表单、引用插入、Git 状态装饰）
+index.js               Host 半部（POST /api/dft.fileops：新建/重命名/回收站/终端；POST /api/dft.git：Git 状态）
 cordis.patch.yml       bundle patch（插入本插件的行）
 package.json           清单：exports / dsh.bundle.patch / dsh.client
 locale/{zh,en}.json    插件市场与管理页展示用的标题/描述
@@ -85,6 +90,8 @@ CHANGELOG.md           版本记录
 - 本机打开调用 `ctx.remote.session.openWorkspacePath({ path, action })` 与 `workspacePathApplications({ path })`。
 - 新建/重命名/删除/终端由 Host 路由处理，使用 Node `fs/promises` + `path`，删除走
   `Microsoft.VisualBasic.FileIO.FileSystem` 的 `SendToRecycleBin`。
+- Git 状态由 Host 直接调用系统 `git`（`execFile`，`GIT_OPTIONAL_LOCKS=0`，15 秒超时、4 MB 上限），
+  不依赖 `dsh-better-sidebar`；客户端共享一份状态、20 秒轮询，并在窗口聚焦、菜单打开和文件操作后刷新。
 - 只依赖宿主提供的 React 与标准 slot props，**无第三方运行时依赖**。
 
 ## 许可

@@ -1,7 +1,7 @@
 # DSH 插件开发知识库
 
 > 全部来自对 DSH 宿主源码（`resources/app.asar/dsh`）的实测与 v1.1.0 插件的落地经验。
-> 参考实现：`plugins/file-tree-context-menu/`。
+> 参考实现：`plugins/dsh-file-tree/`（右键菜单 + Git 状态 + Host 文件操作）。
 
 ## 1. 一个 bundle 的最小构成
 
@@ -192,7 +192,7 @@ Client 渲染进程没有任意文件写、重命名、删除权限；需要时�
 export const inject = ['connection'];
 export function apply(ctx) {
   ctx.effect(() => ctx.connection.fetch.register({
-    path: '/api/ftcm.fileops',
+    path: '/api/dft.fileops',
     methods: ['POST'],
     requestBody: 'buffered',
     fetch: (request) => handle(request)
@@ -205,9 +205,29 @@ export function apply(ctx) {
 - 新建：`fs.mkdir` / `fs.writeFile(target, '', { flag: 'wx' })`；重命名：`fs.rename`（目标已存在返回 409）。
 - 删除到 Windows 回收站：
   `Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile/DeleteDirectory(path, 'OnlyErrorDialogs', 'SendToRecycleBin')`。
-- 外部终端：Host 用 `spawn('cmd.exe', ['/d','/s','/c', 'start "" powershell.exe -NoExit -Command "Set-Location -LiteralPath $env:DSH_FTCM_DIR"'], { env: { ...process.env, DSH_FTCM_DIR: target }, detached: true, stdio: 'ignore' })`，
+- 外部终端：Host 用 `spawn('cmd.exe', ['/d','/s','/c', 'start "" powershell.exe -NoExit -Command "Set-Location -LiteralPath $env:DSH_DFT_DIR"'], { env: { ...process.env, DSH_DFT_DIR: target }, detached: true, stdio: 'ignore' })`，
   路径通过环境变量传入，避免命令拼接注入。
 - 纯 Web / 非 Windows 环境必须返回明确错误，Client 显示失败反馈。
+
+### Git 状态路由
+
+同一套认证路由可以给文件树补 Git 状态（参考 `plugins/dsh-file-tree/index.js`）：
+
+```js
+const raw = await execFileAsync('git', ['-C', root, 'status', '--porcelain=v2', '--branch',
+  '--ahead-behind', '-z', '--untracked-files=all'], {
+  cwd: root, windowsHide: true, timeout: 15000, maxBuffer: 4 * 1024 * 1024,
+  env: { ...process.env, GIT_OPTIONAL_LOCKS: '0' }
+});
+```
+
+- `-z` 下记录以 NUL 分隔；`1` 行 8 个固定字段，`2`（重命名/复制）9 个且**紧跟原路径**，`u` 10 个，`? ` 是未跟踪。
+- `--branch` 同时输出 `# branch.head`、`# branch.upstream`、`# branch.ab +A -B`。
+- 先 `git rev-parse --show-toplevel` 找仓库根，再传相对 pathspec，只返回工作区子树内的路径。
+- 仓库根/工作区可能是子目录，返回的 porcelain 路径相对**仓库根**，客户端要再换算成工作区相对路径。
+- 非 Git 仓库返回 `{ ok: true, isRepo: false }`，不要当错误；Git 未安装同理。
+- 客户端不要改 React 文件树 DOM，只给宿主自己的 `li[data-files-path]` 行加属性、用 CSS 着色/伪元素徽标；
+  观察 DOM 变更做增量重绘。
 
 ## 11. Host 策略插件：失败重试与自动续跑
 
