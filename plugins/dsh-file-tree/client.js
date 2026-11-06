@@ -71,6 +71,7 @@ window.__ModuleLoader__.load({
       'menu.copySelected': '复制已选路径',
       'menu.clearSelection': '清空选择',
       'menu.createIn': '新建于「{name}」',
+      'menu.refreshGit': '刷新 Git 状态',
       'form.newFileTitle': '新建文件',
       'form.newFolderTitle': '新建文件夹',
       'form.renameTitle': '重命名',
@@ -153,6 +154,7 @@ window.__ModuleLoader__.load({
       'menu.copySelected': 'Copy selected paths',
       'menu.clearSelection': 'Clear selection',
       'menu.createIn': 'Create in “{name}”',
+      'menu.refreshGit': 'Refresh Git status',
       'form.newFileTitle': 'New file',
       'form.newFolderTitle': 'New folder',
       'form.renameTitle': 'Rename',
@@ -1526,6 +1528,9 @@ window.__ModuleLoader__.load({
       const isDirectory = kind === 'directory';
       const browserFile = !isDirectory && BROWSER_FILE.test(menuState.path);
       const canUseDesktop = desktopAvailable !== false;
+      // The workspace root itself: it has no workspace-relative name, and it
+      // must never be renamed or deleted.
+      const isRoot = relative === '';
 
       const item = (key, label, run, options) => {
         const mine = current.feedback !== null && current.feedback.key === key;
@@ -1637,6 +1642,28 @@ window.__ModuleLoader__.load({
         const entry = gitEntryNode(menuState.root, menuState.path, kind);
         if (entry !== null) gitNodes.push(entry);
         if (gitNodes.length > 0) gitNodes.push(h('div', { key: 'sep-git', role: 'separator', className: 'dft-sep' }));
+      }
+
+      // Root menus are about the workspace: batch creation, opening, the branch.
+      if (isRoot) {
+        const rootChildren = [
+          ...gitNodes,
+          item('newFile', t('menu.newFile'), () => openFilePrompt('newFile', menuState.root, menuState.path, kind)),
+          item('newFolder', t('menu.newFolder'), () => openFilePrompt('newFolder', menuState.root, menuState.path, kind))
+        ];
+        if (canUseDesktop) {
+          rootChildren.push(h('div', { key: 'sep-open', role: 'separator', className: 'dft-sep' }));
+          rootChildren.push(item('open', t('menu.openFolder'), () => runOpen(absolute)));
+          rootChildren.push(item('reveal', t('menu.reveal'), () => runReveal(absolute)));
+          rootChildren.push(item('terminal', t('menu.terminal'), () => runTerminal(menuState.root, menuState.path, true)));
+        }
+        rootChildren.push(h('div', { key: 'sep-copy', role: 'separator', className: 'dft-sep' }));
+        rootChildren.push(item('absolute', t('menu.copyAbsolute'), () => runCopy('absolute', absolute)));
+        rootChildren.push(item('refreshGit', t('menu.refreshGit'), () => {
+          void refreshGitStatus(menuState.root, true);
+          closeMenu();
+        }));
+        return panel(rootChildren);
       }
 
       const children = [
