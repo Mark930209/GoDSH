@@ -9,6 +9,17 @@
 **1.0.1**，包名从 `@local/*` 改为可直接发布的 `dsh-*`，**同时上线了三条分发渠道**：
 git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 desktop profile 以 `link:`
 装在源码目录，三个条目均为 `fiberPhase: active`。
+`n1n-prompt-tools` 已于 2026-11-06 **整体废弃删除**（从未发版，无 tag / 无 npm 包 / 不在
+市场索引）；它沉淀的缓存与协议知识保留在 `docs/prompt-cache-investigation.md`、
+`docs/dsh-conversation-internals.md`、`docs/text-tool-protocol.md`。
+
+## 知识文档（跨插件复用，勿删）
+
+| 文档 | 内容 |
+|---|---|
+| [prompt-cache-investigation.md](prompt-cache-investigation.md) | 前缀缓存命中率调查全记录：口径、9 组实验、网关行为备忘、公司操作建议、测量陷阱、脚本索引 |
+| [dsh-conversation-internals.md](dsh-conversation-internals.md) | DSH 会话层事实：v4 日志 zstd 帧格式与修复、事件字典、时间提醒不破前缀、水位钩子能/不能拿到什么、配置凭据位置 |
+| [text-tool-protocol.md](text-tool-protocol.md) | 文本工具调用协议：4 种方言与全角 DSML、解析要点、"提到协议≠尝试调用"、自动降级四原则、实测模型行为 |
 
 ## 插件状态
 
@@ -17,7 +28,6 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 | `plugins/auto-retry` | `dsh-auto-retry` | 1.0.1 | `auto-retry-v1.0.1`（`fb77d67`） | link，active |
 | `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | 1.0.1 | `composer-skill-picker-v1.0.1`（`e30c3b2`） | link，active |
 | `plugins/file-tree-context-menu` | `dsh-file-tree-context-menu` | 1.0.1 | `file-tree-context-menu-v1.0.1`（`2d3e8e1`） | link，active |
-| `plugins/n1n-prompt-tools` | `dsh-n1n-prompt-tools` | 1.0.0 | 未发版（本地 1.0.0） | link，待安装验证 |
 
 - 公共 npm：`latest` 均为 `1.0.1`，已实测 `npm i` 三个包可装在干净目录。
   npm 包页同时残留一个 `0.0.0-stage` 占位版本（staged publishing 产物，见
@@ -207,25 +217,16 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
      整轮失败则应看到 `[auto-retry] ... resume 1/5 scheduling in ...ms` 且约 5s 后自动续跑；
      用户抢话应取消待续跑；点停止不应续跑。
 2. `docs/publishing.md` 记录的两个 npm 账号坑若再遇到，按文档处理（2FA token / `0.0.0-stage` 占位）。
-3. **`n1n-prompt-tools` 冒烟**：装到 desktop profile 后，在 n1n 的会话里让模型做一次工具调用
-   （如读取文件），确认：工具真的执行、UI 正常显示、会话记录里 assistant 是 `tool-call` 块。
-   **重启后重点看两件事**：日志里不应再出现被"讨论插件"触发的 `auto-detect` 降级；并发子 agent
-   同时失败时应看到 `burst: true` 而不是计数直接跳到 2。
-4. **决定插件去留**（已用五组实验核实，待用户拍板）：
-   - 事实一：`tools` 字段不再阻止缓存增长（300 / 3000 / 8000 tokens 三种 system 规模，
-     20–25K 真实规模，30 轮配对，两臂全部 98–99%，缓存都随对话增长）；
-   - 事实二：健康窗口内 text 与 native 命中率同为 94–99%；
-   - 事实三：文本协议本身可靠（读文件任务两臂都 10/10 成功）。
-   **结论：插件当前的缓存收益是 0**，"保住命中率"不靠插件也能达到。
-   - 保留的理由只剩行为偏好（让模型看到 32 个工具的目录与描述），成本是多一层解析器与降级风险；
-   - 停用的理由是少一层故障面——本会话的故障根因全在这一层（DSML 泄漏、漏降级、并发误降级）；
-   - **给公司的注意点**：不要把它当缓存优化来推广；若要推广，理由应是行为一致性，且需接受
-     解析器维护成本。参考插件 `dsh-llm-text-tools` 的 README 立论已过时，不宜直接引用。
-5. 可选：在 npmjs.com 用 2FA 手动删掉三个包的 `0.0.0-stage` 占位版本，让包页干净。
-6. 计划新插件：`node scripts\new-plugin.mjs dsh-xxx`。
-7. **RTK 接入评估（2026-11-06 调研 + 复测，已轻度接入）** —— 见下节「省 token 工具的调研结论」。
+3. ~~**`n1n-prompt-tools` 冒烟**~~ / ~~**决定插件去留**~~ —— **已定案（2026-11-06）：废弃删除。**
+   五组实验证明该网关下缓存收益为 0（实验细节与全部数据已整理进
+   [prompt-cache-investigation.md](prompt-cache-investigation.md)），插件机制虽正常但失去
+   存在理由；协议方言与降级设计教训见 [text-tool-protocol.md](text-tool-protocol.md)。
+   它从未发版：无 git tag、npm 404、不在市场索引，删除无需撤发布。
+4. 可选：在 npmjs.com 用 2FA 手动删掉三个包的 `0.0.0-stage` 占位版本，让包页干净。
+5. 计划新插件：`node scripts\new-plugin.mjs dsh-xxx`。
+6. **RTK 接入评估（2026-11-06 调研 + 复测，已轻度接入）** —— 见下节「省 token 工具的调研结论」。
    已把 `rg.exe` 放进 `~/.local/bin` 修好 `rtk rg`；结论是「只在手工终端用 `rtk git log` / `rtk rg`，不写插件」。
-8. **LSP 级代码查询**（同上节），两条路线待选。
+7. **LSP 级代码查询**（同上节），两条路线待选。
 
 ## 省 token 工具的调研结论（2026-11-06）
 
