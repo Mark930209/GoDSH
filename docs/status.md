@@ -54,6 +54,26 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 
 ## 已完成（时间线）
 
+- **2026-11-06 · `n1n-prompt-tools` 废弃删除（用户拍板）**。五组实验（见
+  [prompt-cache-investigation.md](prompt-cache-investigation.md)）证明该网关下缓存收益为 0，
+  插件失去存在理由，保留只剩故障面。删除清单：
+  - **发布侧本来就没有可删的**：实测远端无 `n1n-prompt-tools-*` tag（`git ls-remote`）、
+    npm `dsh-n1n-prompt-tools` 与旧名 `dsh-prompt-tools` 均 404（从未发布）、市场索引仅 3 条
+    不含它——"未发版"属实，无需撤发布。
+  - 本机装载：profile `package.json` 的 bundles 早先已不含它，但
+    `profiles\desktop\node_modules\dsh-n1n-prompt-tools` 还有一个**符号链接**残留（cordis
+    装载器扫 node_modules，插件因此仍在运行）。用 `cmd /c rmdir` 删链接（PowerShell 5.1
+    对目录链接的 `Remove-Item` 会连带删目标——本仓库事故教训），删后核验源码目录完好。
+  - 仓库：`git rm -r plugins/n1n-prompt-tools`（含 69 项测试、README/CHANGELOG），并
+    `git rm` 三个 import 插件源码的脚本（`_dsml_fuzz` / `_dsml_repro` / `_proto_probe`；
+    fuzz 方法论已文字化保留在 [text-tool-protocol.md](text-tool-protocol.md)）。
+  - 参考插件本地副本 `plugins/dsh-llm-text-tools/`（未跟踪的第三方拷贝）：压缩备份至
+    `~/.dsh/backups/dsh-llm-text-tools-copy-20261106.zip` 后删除；临时 dump
+    `scratch_events.jsonl` 删除（会话原日志可再导出）。
+  - 知识沉淀三份文档（见上「知识文档」表）+ 全部可复现缓存脚本已在删除**之前**提交入库。
+  - 当前运行进程仍带着已加载的插件补丁，**下次重启后彻底消失**；重启后
+    `%TEMP%\n1n-diag.jsonl` 不再增长即为验证。
+
 - **2026-11-06 · 插件是否失效的最终核查（结论：缓存收益为 0，机制正常）**。这是为"全公司如何使用"
   做的决策依据，五组独立实验：
 
