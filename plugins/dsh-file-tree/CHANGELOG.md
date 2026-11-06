@@ -3,7 +3,9 @@
 本文件记录所有值得注意的变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 **版本策略：只有用户明确要求发版时才 bump / 打 tag / 建 Release。**
 
-## [Unreleased]
+## [1.1.0] - 2026-11-06
+
+首个以 **`dsh-file-tree`** 为包名发布的版本；功能上承接 1.0.1 的右键菜单，并补上文件树本身缺失的 Git 视图。
 
 ### Added
 
@@ -32,7 +34,8 @@
   模块 id、locale 命名空间、CSS 前缀、Host 路由与 `cordis.patch.yml` 同步更新。
 - 定位从「文件树右键菜单」改为「文件树增强」：市场标题改为「文件树增强 / File Tree Enhancements」，
   说明以文件树 Git 视图为主、右键菜单为辅。
-- 本版本未发版、未 bump 版本号、未刷新市场索引。
+- 旧包名 `dsh-file-tree-context-menu@1.0.1` 停止更新但保留在 npm，老用户可继续安装；
+  新功能只随 `dsh-file-tree` 发布。
 
 ## [1.0.1] - 2026-11-04
 
