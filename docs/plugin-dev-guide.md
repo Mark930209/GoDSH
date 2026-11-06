@@ -65,6 +65,14 @@ window.__ModuleLoader__.load({
 - `ctx.locale.register(NS, { zh, en })` + `ctx.locale.bind(NS)` 得到 `t(key)`；双语必备。
 - `ctx.effect(() => cleanup, label)` 注册副作用与清理。
 
+> **改名陷阱（1.1.1 翻车实录）**：`id` 必须等于 `package.json#name`。
+> 宿主扫描客户端插件时，用**包名**（即 loader 条目 `options.name`）生成 `__DSH_BOOT__`
+> 的清单行（`/plugins/<包名>/client.js`），浏览器再按这个 id `import` 模块；
+> 但 `client.js` 里的 `id` 是脚本自报的。只改 `package.json` 和 `cordis.patch.yml`、
+> 忘了改 `client.js` 的 `id`，两边就对不上，模块解析抛错，**整个客户端插件加载失败**。
+> 加作用域前缀（`@scope/name`）时尤其容易漏。
+> `node scripts/validate-plugins.mjs` 现在会校验这条契约。
+
 ## 3. 常用插槽与 props
 
 | 插槽 | 用途 | 关键 props |

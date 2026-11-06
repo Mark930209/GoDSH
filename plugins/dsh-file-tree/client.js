@@ -33,7 +33,11 @@
  * (workspace-relative, trailing `/` for folders, quoted on whitespace).
  */
 window.__ModuleLoader__.load({
-  id: 'dsh-file-tree',
+  // The module-system id MUST equal the npm package name: the Host builds its
+  // boot manifest rows from the loader entry's `name` (which the bundle patch
+  // sets to this package name) and imports that id in the browser. A mismatch
+  // here makes the client half unresolvable — the whole plugin fails to load.
+  id: '@guimaxingtian/dsh-file-tree',
   factory(require) {
     const React = require('react');
     const h = React.createElement;

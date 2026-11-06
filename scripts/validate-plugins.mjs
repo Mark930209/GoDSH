@@ -100,6 +100,21 @@ for (const name of names) {
       problems.push(js + ' 语法检查失败: ' + String(error.stderr || error.message).trim().split(/\r?\n/u)[0]);
     }
   }
+  // Client module id contract: the browser module system keys rows by the
+  // package name (the Host builds each boot row from the loader entry's name,
+  // which the bundle patch sets to the package name). A client.js that
+  // registers under any other id is unresolvable in the browser, so the whole
+  // plugin silently fails to load — catch it here instead of at runtime.
+  if (pkg && pkg.dsh && pkg.dsh.client !== undefined && typeof pkg.name === 'string' && existsSync(join(dir, 'client.js'))) {
+    const source = readFileSync(join(dir, 'client.js'), 'utf8');
+    const registered = /__ModuleLoader__\.load\(\s*\{[\s\S]{0,2000}?\bid:\s*'([^']+)'/u.exec(source);
+    if (registered === null) {
+      problems.push('client.js 没有用 __ModuleLoader__.load({ id }) 注册模块');
+    } else if (registered[1] !== pkg.name) {
+      problems.push('client.js 的模块 id "' + registered[1] + '" 与包名 "' + pkg.name + '" 不一致');
+    }
+  }
+
   for (const locale of ['zh.json', 'en.json']) {
     const file = join(dir, 'locale', locale);
     if (!existsSync(file)) continue;

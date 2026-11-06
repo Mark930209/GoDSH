@@ -3,6 +3,18 @@
 本文件记录所有值得注意的变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 **版本策略：只有用户明确要求发版时才 bump / 打 tag / 建 Release。**
 
+## [1.1.2] - 2026-11-06
+
+### Fixed
+
+- **客户端整份插件无法加载（1.1.1 引入，属严重回归）**：`client.js` 里的
+  `window.__ModuleLoader__.load({ id })` 仍是旧 id `dsh-file-tree`，而宿主按**包名**
+  （`@guimaxingtian/dsh-file-tree`）生成启动清单行并在浏览器里 import 该 id，
+  两边对不上时模块解析直接抛错，整个客户端插件加载失败。
+  现在 id 与包名一致；`scripts/validate-plugins.mjs` 增加契约校验：
+  声明了 `dsh.client` 的包，其 `client.js` 注册的 id 必须等于 `package.json#name`。
+- 1.1.1 从未正常工作，请直接使用 1.1.2。
+
 ## [1.1.1] - 2026-11-06
 
 ### Changed
