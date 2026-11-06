@@ -1,6 +1,6 @@
 {
   "name": "dsh-file-tree",
-  "version": "1.0.1",
+  "version": "1.1.0",
   "description": "Git-aware workspace file tree: change tints and letter badges, directory aggregation, and a files-header pill showing the branch with its unpushed/unpulled counts. Right-click files or folders for a menu that adds them to the conversation, copies paths/links, previews in DSH, opens a terminal, summarizes with AI, creates/renames/deletes entries, or reveals them in the file manager.",
   "type": "module",
   "author": "Mark930209 <guimaxingtian@163.com>",
