@@ -33,7 +33,7 @@
 - 历史上用过 `@local/<目录名>` + `private: true` 的本地写法；2026-11-04 起统一改成裸名 `dsh-*`
   并移除 `private`，`npm publish` 即可上线（改名后本机需 `remove_bundle` 旧名再装）。
 - 版本：每插件独立 semver；`package.json#version` 是唯一事实源。
-- **tag：`<插件目录名>-v<version>`**，例如 `dsh-file-tree-v1.0.1`（改名前的旧 tag `file-tree-context-menu-v1.0.1` 仍存在）。
+- **tag：`<插件目录名>-v<version>`**，例如 `dsh-file-tree-v1.1.0`（改名前的旧 tag `file-tree-context-menu-v1.0.1` 仍存在）。
   （用 `npm version` 默认生成 `v1.1.0`，在 monorepo 里请补一个带前缀的 tag，或直接用 `git tag <name>-v<ver>`。）
 
 ## 索引与安装的对应关系
@@ -48,7 +48,7 @@
 
 - 市场索引里每个版本：
   ```json
-  { "version": "1.0.1",
+  { "version": "1.1.0",
     "source": { "type": "git", "url": "https://github.com/Mark930209/GoDSH",
                 "commit": "<40位>", "path": "plugins/dsh-file-tree" },
     "engines": { "dsh": ">=0.2.1-rc.5" } }

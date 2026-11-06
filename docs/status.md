@@ -5,16 +5,14 @@
 
 ## 一句话状态
 
-三个插件（`auto-retry` / `composer-skill-picker` / `dsh-file-tree`）的已发布版本仍统一为
-**1.0.1**，**同时上线了三条分发渠道**：git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。
+三个插件（`auto-retry` / `composer-skill-picker` / `dsh-file-tree`）都已发布，**三条分发渠道**同时在线：
+git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。
 本机 desktop profile 以 `link:` 装在源码目录，三个条目均为 `fiberPhase: active`。
 
-> **2026-11-06 工作区变更（未发版）**：原 `file-tree-context-menu` 已改名为 **`dsh-file-tree`**，
-> 并加入 Git 改动着色 / 字母徽标 / 菜单 Git 摘要。版本号仍是 1.0.1，**未 bump、未打新 tag、
-> 未建 Release、未刷新市场索引**；npm 上的新包名尚不存在，市场索引仍指向旧包名。
-> 代码已提交为 `1dbb9d9`+`d4526ae`；`validate-plugins`、Host Git 路由测试、Client 加载/模型/菜单测试均通过。
-> 2026-11-06 16:51 DSH 已重启并加载新 bundle（本会话的代码即来自新 Host），
-> **GUI 侧冒烟（着色、字母徽标、菜单摘要、原有动作）仍需人工确认一次**。
+> **2026-11-06 已发版**：`file-tree-context-menu` 改名为 **`dsh-file-tree`**，
+> 并加入 Git 改动着色 / 字母徽标 / 页头分支胶囊（含未推送提交数）。版本 **1.1.0**，
+> tag `dsh-file-tree-v1.1.0`（`22a14a1`），市场索引已刷新，npm 已发布。
+> 旧包 `dsh-file-tree-context-menu@1.0.1` 保留但不再更新。
 `n1n-prompt-tools` 已于 2026-11-06 **整体废弃删除**（从未发版，无 tag / 无 npm 包 / 不在
 市场索引）；它沉淀的缓存与协议知识保留在 `docs/prompt-cache-investigation.md`、
 `docs/dsh-conversation-internals.md`、`docs/text-tool-protocol.md`。
@@ -31,15 +29,16 @@
 
 | 目录 | npm 包名 | 版本 | tag（commit） | 本机安装 |
 |---|---|---|---|---|
-| `plugins/auto-retry` | `dsh-auto-retry` | 1.0.1 | `auto-retry-v1.0.1`（`fb77d67`） | link，active |
+| `plugins/auto-retry` | `dsh-auto-retry` | 1.0.2 | `auto-retry-v1.0.2`（`12a89aa`） | link，active |
 | `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | 1.0.1 | `composer-skill-picker-v1.0.1`（`e30c3b2`） | link，active |
-| `plugins/dsh-file-tree` | `dsh-file-tree`（旧名 `dsh-file-tree-context-menu`） | 1.0.1 | 旧 tag `file-tree-context-menu-v1.0.1`（`2d3e8e1`）；改名后未发新 tag | link 已指向新目录，16:51 重启后已加载 |
+| `plugins/dsh-file-tree` | `dsh-file-tree`（旧名 `dsh-file-tree-context-menu`） | 1.1.0 | `dsh-file-tree-v1.1.0`（`22a14a1`） | link，active |
 
-- 公共 npm：三个旧包名的 `latest` 均为 `1.0.1`，已实测 `npm i` 可装在干净目录；
-  `dsh-file-tree` 这个新包名尚未发布。
+- 公共 npm：`dsh-auto-retry` 为 `1.0.2`、`dsh-composer-skill-picker` 为 `1.0.1`、`dsh-file-tree` 为 `1.1.0`；
+  旧包 `dsh-file-tree-context-menu` 停在 `1.0.1`，不再更新。
   npm 包页同时残留一个 `0.0.0-stage` 占位版本（staged publishing 产物，见
   [publishing.md](publishing.md#账号层面的两个坑已踩过)），不影响安装。
-- 市场索引：<https://mark930209.github.io/GoDSH/market-index.json>（实测 200，3 条，均 1.0.1）。
+- 市场索引：<https://mark930209.github.io/GoDSH/market-index.json>（3 条：auto-retry 1.0.2、
+  composer-skill-picker 1.0.1、dsh-file-tree 1.1.0）。
 - 旧 tag `*-v1.0.0` 与对应 Release 保留为历史，索引只列当前 `package.json` 版本。
 
 ## 环境事实
@@ -62,6 +61,15 @@
 
 ## 已完成（时间线）
 
+- **2026-11-06 · `dsh-file-tree` 1.1.0 发布**（用户明确要求发版）。
+  - 版本 1.0.1 → **1.1.0**（minor：改名 + Git 视图属于新增能力），tag `dsh-file-tree-v1.1.0`
+    指向 `22a14a1`，随后的索引提交为 `4c0812e`。
+  - `docs/market-index.json` 已刷新：条目从旧名 `dsh-file-tree-context-menu@1.0.1`
+    变为 `dsh-file-tree@1.1.0`（旧目录已改名，索引不再收录旧条目，但 npm 旧包仍可安装）。
+  - 推 `main` + tag 后由 `release.yml` 建 GitHub Release 并二次刷新索引，`pages.yml` 部署 Pages。
+  - 本次同时把 `auto-retry` 的文档版本对齐到实际的 `1.0.2`（`auto-retry-v1.0.2`）。
+  - 新增能力见 [../plugins/dsh-file-tree/CHANGELOG.md](../plugins/dsh-file-tree/CHANGELOG.md)。
+
 - **2026-11-06 · `dsh-file-tree` 二次打磨：定位改「文件树增强」+ 未推送可见**。
   - **定位**：市场标题从「文件树右键菜单 / File Tree Context Menu」改为
     「文件树增强 / File Tree Enhancements」，说明改成以文件树 Git 视图为主、右键菜单为辅。
@@ -72,7 +80,7 @@
     `hasUpstream`/`upstream`，用来区分「已同步」和「从未 push 过」——后者绝不能显示成 ✓。
   - **验证**：Host 路由测试新增 push 到 bare 远程（ahead=1）、`--unset-upstream`（hasUpstream=false）
     两段；Client 测试覆盖 synced/unpushed/behind/diverged/local/detached 六种语义与胶囊渲染。
-  - **未发版**：版本仍 1.0.1，未打 tag、未刷新市场索引。
+  - 该轮改动随后作为 **1.1.0** 发布（见上一条）。
 
 - **2026-11-06 · 安装同事的第三方插件 `dsh-llm-text-tools`（内网 git）**。用户给的是
   `http://git.51vr.local/xuyifei/dsh-llm-text-tools`（本人仓库，0.2.0，HEAD `b53c892`）。

@@ -12,14 +12,16 @@
 
 ## 1. npm 安装
 
-两个插件已发布到公共 npm（2026-11-04，`1.0.1`）；文件树插件已改名为 `dsh-file-tree`，
-**新包名尚未发布**（npm 上仍是旧名 `dsh-file-tree-context-menu@1.0.1`，不含 Git 状态功能）：
+三个插件都已发布到公共 npm：
 
-| 目录 | npm 包名 | 包页 |
-|---|---|---|
-| `plugins/auto-retry` | `dsh-auto-retry` | <https://www.npmjs.com/package/dsh-auto-retry> |
-| `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | <https://www.npmjs.com/package/dsh-composer-skill-picker> |
-| `plugins/dsh-file-tree` | `dsh-file-tree`（未发布；旧名 `dsh-file-tree-context-menu`） | <https://www.npmjs.com/package/dsh-file-tree-context-menu> |
+| 目录 | npm 包名 | 版本 | 包页 |
+|---|---|---|---|
+| `plugins/auto-retry` | `dsh-auto-retry` | 1.0.2 | <https://www.npmjs.com/package/dsh-auto-retry> |
+| `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | 1.0.1 | <https://www.npmjs.com/package/dsh-composer-skill-picker> |
+| `plugins/dsh-file-tree` | `dsh-file-tree` | 1.1.0 | <https://www.npmjs.com/package/dsh-file-tree> |
+
+> 文件树插件原名 `dsh-file-tree-context-menu`（最后版本 1.0.1，含旧右键菜单、无 Git 状态）。
+> 该旧包仍在 npm 且可安装，但已停止更新；新功能只随 `dsh-file-tree` 发布。
 
 在 DSH 里装：**Web 侧边栏 → Plugins → npm 安装页 → 填包名**，例如：
 
@@ -27,7 +29,7 @@
 dsh-auto-retry
 ```
 
-要钉版本就填 `dsh-auto-retry@1.0.1`。
+要钉版本就填 `dsh-auto-retry@1.0.2`。
 
 命令行等价（仅把包拉到本地，不注册进 DSH）：
 
@@ -46,19 +48,18 @@ npm i dsh-auto-retry --registry=https://registry.npmjs.org/
 git+https://github.com/Mark930209/GoDSH.git#<40位commit>&path:/plugins/<目录名>
 ```
 
-monorepo **必须带 `path:`**，否则装的是仓库根。当前的 `1.0.1`：
+monorepo **必须带 `path:`**，否则装的是仓库根。当前各插件的最新版：
 
 ```powershell
-git+https://github.com/Mark930209/GoDSH.git#fb77d671e53d26f93718aaebb580e5378f880531&path:/plugins/auto-retry
+git+https://github.com/Mark930209/GoDSH.git#12a89aad7f085ba23ea3ad7c1bf2816336337569&path:/plugins/auto-retry
 git+https://github.com/Mark930209/GoDSH.git#e30c3b2a7f6ee07747ec0ff7af920c1e7b91526b&path:/plugins/composer-skill-picker
-# 文件树插件已改名，Git 状态功能尚未发版，暂用 main 的最新提交：
-git+https://github.com/Mark930209/GoDSH.git#main&path:/plugins/dsh-file-tree
+git+https://github.com/Mark930209/GoDSH.git#22a14a17ceee240286944ad96f98cd4ba7d90f45&path:/plugins/dsh-file-tree
 ```
 
 拿某个 tag 的 commit：
 
 ```powershell
-git rev-parse auto-retry-v1.0.1^{commit}
+git rev-parse auto-retry-v1.0.2^{commit}
 ```
 
 安装前 DSH 会做 git 连通性探测（约 5s）。GitHub 不稳时可用同格式的 Gitee 镜像。
@@ -69,11 +70,11 @@ git rev-parse auto-retry-v1.0.1^{commit}
 1. 启用插件市场 bundle：@deepseek-ai/dsh-experimental-plugin-market-bundle（默认关闭）
    Web 侧边栏 Plugins 页 → 或 patch 里加 include 行 → 重载
 2. 添加索引 URL：https://mark930209.github.io/GoDSH/market-index.json
-3. Discover → 安装 auto-retry / composer-skill-picker / file-tree-context-menu
+3. Discover → 安装 auto-retry / composer-skill-picker / dsh-file-tree
 4. 重启 DSH，确认 Plugins 页对应条目为 active
 
-> 当前市场索引仍是 2026-11-04 的 1.0.1 快照，文件树条目还是旧名/旧目录；
-> 改名与 Git 状态要等用户明确要求发版后才刷新索引。用 npm / git / 本地 link 可先装到新版。
+> 索引已收录 `dsh-file-tree@1.1.0`（旧条目 `dsh-file-tree-context-menu` 因目录改名不再列出，
+> 但 npm 上的旧包仍可安装）。索引由 tag 驱动，只有发版后才会出现新版本。
 ```
 
 索引由 `docs/market-index.json` 生成并托管在 GitHub Pages，规则见
