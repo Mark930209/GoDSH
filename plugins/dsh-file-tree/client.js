@@ -642,7 +642,8 @@ window.__ModuleLoader__.load({
           headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ root })
         });
-        const data = await response.json();
+        // A 401 page or a proxy error is HTML, not JSON; treat it as "unknown".
+        const data = await response.json().catch(() => null);
         if (data !== null && data.ok === true && data.isRepo === false) {
           const next = { isRepo: false, branch: null, detached: false, operation: null, files: new Map(), dirs: new Map() };
           const previous = gitSnapshots.get(key);
