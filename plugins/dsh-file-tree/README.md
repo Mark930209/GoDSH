@@ -64,7 +64,7 @@ install_bundle  target = <本目录绝对路径>
 git+https://github.com/Mark930209/GoDSH.git#<40位commit>&path:/plugins/dsh-file-tree
 ```
 
-方式三（从 npm 安装）：`@guimaxingtian/dsh-file-tree@1.1.1`。裸名 `dsh-file-tree` 会被 npm
+方式三（从 npm 安装）：`@guimaxingtian/dsh-file-tree@1.1.2`。裸名 `dsh-file-tree` 会被 npm
 的包名相似度检查拒收（已存在第三方包 `dsh-filetree`），所以 npm 包名带作用域；目录名、tag 前缀与
 cordis 条目 id 仍是不带作用域的 `dsh-file-tree`。
 
@@ -73,7 +73,7 @@ cordis 条目 id 仍是不带作用域的 `dsh-file-tree`。
 
 ## 版本策略
 
-- 当前版本 **1.1.1**（npm `@guimaxingtian/dsh-file-tree`，tag `dsh-file-tree-v1.1.1`，commit `79a80bd`）；**只有用户明确要求发版时才 bump 版本、打 tag、建 Release、刷新市场索引**。
+- 当前版本 **1.1.2**（npm `@guimaxingtian/dsh-file-tree`，tag `dsh-file-tree-v1.1.2`，commit `0faf870`）；**只有用户明确要求发版时才 bump 版本、打 tag、建 Release、刷新市场索引**。
 - 日常修改只提交代码，不发版、不改版本号。
 - 本插件从 `dsh-file-tree-context-menu` 更名为 **`dsh-file-tree`**；旧包名 `1.0.1` 保留在 npm，但不再更新。
 - 更早的 1.1.0 / 1.2.0 编号（旧包名下）已废弃，相关 tag 与 Release 已清理。

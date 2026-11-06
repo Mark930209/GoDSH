@@ -18,7 +18,7 @@
 |---|---|---|---|
 | `plugins/auto-retry` | `dsh-auto-retry` | 1.0.2 | <https://www.npmjs.com/package/dsh-auto-retry> |
 | `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | 1.0.1 | <https://www.npmjs.com/package/dsh-composer-skill-picker> |
-| `plugins/dsh-file-tree` | `@guimaxingtian/dsh-file-tree` | 1.1.1 | <https://www.npmjs.com/package/@guimaxingtian/dsh-file-tree> |
+| `plugins/dsh-file-tree` | `@guimaxingtian/dsh-file-tree` | 1.1.2 | <https://www.npmjs.com/package/@guimaxingtian/dsh-file-tree> |
 
 > **为什么带作用域**：npm 的包名相似度检查把裸名 `dsh-file-tree` 判定为与第三方包
 > `dsh-filetree`（mdikarev 的 Workspace file tree panel）过于相似，直接返回 403 并建议改用作用域包名。
@@ -31,7 +31,7 @@
 dsh-auto-retry
 ```
 
-要钉版本就填 `dsh-auto-retry@1.0.2`、`@guimaxingtian/dsh-file-tree@1.1.1`。
+要钉版本就填 `dsh-auto-retry@1.0.2`、`@guimaxingtian/dsh-file-tree@1.1.2`。
 
 命令行等价（仅把包拉到本地，不注册进 DSH）：
 
@@ -55,7 +55,7 @@ monorepo **必须带 `path:`**，否则装的是仓库根。当前各插件的�
 ```powershell
 git+https://github.com/Mark930209/GoDSH.git#12a89aad7f085ba23ea3ad7c1bf2816336337569&path:/plugins/auto-retry
 git+https://github.com/Mark930209/GoDSH.git#e30c3b2a7f6ee07747ec0ff7af920c1e7b91526b&path:/plugins/composer-skill-picker
-git+https://github.com/Mark930209/GoDSH.git#79a80bd6e11927399df42f44f37deee35480bafb&path:/plugins/dsh-file-tree
+git+https://github.com/Mark930209/GoDSH.git#0faf87021a8b926d27b087260d6406156c2db0a2&path:/plugins/dsh-file-tree
 ```
 
 拿某个 tag 的 commit：

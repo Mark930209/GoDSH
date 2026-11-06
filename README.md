@@ -4,7 +4,7 @@
 
 - 仓库：<https://github.com/Mark930209/GoDSH>
 - 维护者：Mark930209 `<guimaxingtian@163.com>`
-- 当前版本：`auto-retry` **1.0.2**、`composer-skill-picker` **1.0.1**、`dsh-file-tree` **1.1.1**（2026-11-06）
+- 当前版本：`auto-retry` **1.0.2**、`composer-skill-picker` **1.0.1**、`dsh-file-tree` **1.1.2**（2026-11-06）
 
 ## 插件
 
@@ -12,7 +12,7 @@
 |---|---|---|---|
 | [auto-retry](plugins/auto-retry/) | 1.0.2 | `dsh-auto-retry` | Host-only 策略插件：模型请求失败按指数退避重试，整轮仍失败则延时自动续跑同一会话，直到任务完成或达到次数上限；重试时对话里显示「正在重试模型请求（n/6） · Ns」 |
 | [composer-skill-picker](plugins/composer-skill-picker/) | 1.0.1 | `dsh-composer-skill-picker` | 输入框工具行常驻技能下拉框，自动发现项目技能（`.dsh/skills`、`.agents/skills`），选中即插入 `/技能名` |
-| [dsh-file-tree](plugins/dsh-file-tree/) | 1.1.1 | `@guimaxingtian/dsh-file-tree`（npm 拒收裸名 `dsh-file-tree`；旧 npm：`dsh-file-tree-context-menu`） | 文件树增强：Git 改动着色/字母徽标/目录聚合，页头胶囊显示分支与**未推送/未拉取提交数**；右键菜单提供加入对话（引用芯片）、复制路径与链接、DSH 内预览、终端打开、AI 总结/解释、新建/重命名/回收站、多选批量 |
+| [dsh-file-tree](plugins/dsh-file-tree/) | 1.1.2 | `@guimaxingtian/dsh-file-tree`（npm 拒收裸名 `dsh-file-tree`；旧 npm：`dsh-file-tree-context-menu`） | 文件树增强：Git 改动着色/字母徽标/目录聚合，页头胶囊显示分支与**未推送/未拉取提交数**；右键菜单提供加入对话（引用芯片）、复制路径与链接、DSH 内预览、终端打开、AI 总结/解释、新建/重命名/回收站、多选批量 |
 
 ## 安装
 
@@ -32,7 +32,7 @@ dsh-composer-skill-picker
 ```powershell
 git+https://github.com/Mark930209/GoDSH.git#12a89aad7f085ba23ea3ad7c1bf2816336337569&path:/plugins/auto-retry
 git+https://github.com/Mark930209/GoDSH.git#e30c3b2a7f6ee07747ec0ff7af920c1e7b91526b&path:/plugins/composer-skill-picker
-git+https://github.com/Mark930209/GoDSH.git#79a80bd6e11927399df42f44f37deee35480bafb&path:/plugins/dsh-file-tree
+git+https://github.com/Mark930209/GoDSH.git#0faf87021a8b926d27b087260d6406156c2db0a2&path:/plugins/dsh-file-tree
 ```
 
 **③ 市场索引** — 启用 `@deepseek-ai/dsh-experimental-plugin-market-bundle`，

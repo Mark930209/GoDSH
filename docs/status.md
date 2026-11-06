@@ -9,7 +9,7 @@
 git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。
 本机 desktop profile 以 `link:` 装在源码目录，三个条目均为 `fiberPhase: active`。
 
-> **2026-11-06 已发版**：`file-tree-context-menu` 改名为 **`dsh-file-tree`**，
+> **2026-11-06 已发版（当前 1.1.2）**：`file-tree-context-menu` 改名为 **`dsh-file-tree`**，
 > 并加入 Git 改动着色 / 字母徽标 / 页头分支胶囊（含未推送提交数）。版本 **1.1.0**，
 > tag `dsh-file-tree-v1.1.0`（`22a14a1`）、GitHub Release、市场索引均已就绪；
 > **npm 因包名与 `dsh-filetree` 相似被拒，尚未发布**。
@@ -33,10 +33,10 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。
 |---|---|---|---|---|
 | `plugins/auto-retry` | `dsh-auto-retry` | 1.0.2 | `auto-retry-v1.0.2`（`12a89aa`） | link，active |
 | `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | 1.0.1 | `composer-skill-picker-v1.0.1`（`e30c3b2`） | link，active |
-| `plugins/dsh-file-tree` | `@guimaxingtian/dsh-file-tree`（旧名 `dsh-file-tree-context-menu`） | 1.1.1 | `dsh-file-tree-v1.1.1`（`79a80bd`） | link，active（待重启换名） |
+| `plugins/dsh-file-tree` | `@guimaxingtian/dsh-file-tree`（旧名 `dsh-file-tree-context-menu`） | 1.1.2 | `dsh-file-tree-v1.1.2`（`0faf870`） | link，重启后加载 |
 
 - 公共 npm：`dsh-auto-retry` `1.0.2`、`dsh-composer-skill-picker` `1.0.1`、
-  `@guimaxingtian/dsh-file-tree` `1.1.1`（裸名 `dsh-file-tree` 被 npm 判为与第三方包
+  `@guimaxingtian/dsh-file-tree` `1.1.2`（裸名 `dsh-file-tree` 被 npm 判为与第三方包
   `dsh-filetree` 过于相似而拒收，故改用作用域包名）。旧包 `dsh-file-tree-context-menu`
   停在 `1.0.1`，不再更新。
   npm 包页同时残留一个 `0.0.0-stage` 占位版本（staged publishing 产物，见
@@ -64,6 +64,20 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。
 | 验证基线 | DSH `0.2.1-rc.5`，Windows 桌面端 |
 
 ## 已完成（时间线）
+
+- **2026-11-06 · `dsh-file-tree` 1.1.2：修 1.1.1 的致命回归**
+  - **现象**：用户装上 1.1.1 后 DSH 直接崩溃、GUI 状态像被清空。
+  - **根因（我的 bug）**：改包名加作用域后，`client.js` 里
+    `window.__ModuleLoader__.load({ id: 'dsh-file-tree' })` 没跟着改。宿主按**包名**
+    （loader 条目 `options.name`）生成 `__DSH_BOOT__` 清单行（`/plugins/<包名>/client.js`），
+    浏览器按该 id `import`；注册 id 与清单 id 不一致 → 模块解析抛错 → 客户端插件整份加载失败。
+  - **修复**：id 改为 `@guimaxingtian/dsh-file-tree`；`validate-plugins.mjs` 增加契约校验
+    （声明 `dsh.client` 的包，client.js 注册 id 必须等于 `package.json#name`）；
+    `plugin-dev-guide.md` 记下这条改名陷阱。
+  - **验证**：三处身份（package.json / cordis.patch.yml / client id）逐字相等；用
+    `ELECTRON_RUN_AS_NODE + DSH_HOME=<临时 home> --dump-config` 在隔离 profile 上合成通过；
+    client 加载测试改为按 package.json 断言 id。
+  - 发布：tag `dsh-file-tree-v1.1.2`（`0faf870`），npm 已提交（staged，需 2FA 批准），索引已刷新。
 
 - **2026-11-06 · `dsh-file-tree` 1.1.0 发布**（用户明确要求发版）。
   - 版本 1.0.1 → **1.1.0**（minor：改名 + Git 视图属于新增能力），tag `dsh-file-tree-v1.1.0`
