@@ -64,16 +64,16 @@ install_bundle  target = <本目录绝对路径>
 git+https://github.com/Mark930209/GoDSH.git#<40位commit>&path:/plugins/dsh-file-tree
 ```
 
-方式三（从 npm 安装）：**暂不可用**。1.1.0 已发布到 git tag / GitHub Release / 市场索引，
-但 npm 的包名相似度检查拒绝了裸名 `dsh-file-tree`（已有第三方包 `dsh-filetree`），
-需要先确定作用域名或替代名后再补发。
+方式三（从 npm 安装）：`@guimaxingtian/dsh-file-tree@1.1.1`。裸名 `dsh-file-tree` 会被 npm
+的包名相似度检查拒收（已存在第三方包 `dsh-filetree`），所以 npm 包名带作用域；目录名、tag 前缀与
+cordis 条目 id 仍是不带作用域的 `dsh-file-tree`。
 
 > **改动生效**：本 bundle 以 `link:` 方式安装，修改 `client.js` / `index.js` 后**重启 DeepSeek Harness** 即可加载新代码
 > （替换已安装的包必须重启才会加载新一代 JS 模块，仅刷新页面不一定够）。
 
 ## 版本策略
 
-- 当前版本 **1.1.0**（tag `dsh-file-tree-v1.1.0`，commit `22a14a1`）；**只有用户明确要求发版时才 bump 版本、打 tag、建 Release、刷新市场索引**。
+- 当前版本 **1.1.1**（npm `@guimaxingtian/dsh-file-tree`，tag `dsh-file-tree-v1.1.1`，commit 见发版记录）；**只有用户明确要求发版时才 bump 版本、打 tag、建 Release、刷新市场索引**。
 - 日常修改只提交代码，不发版、不改版本号。
 - 本插件从 `dsh-file-tree-context-menu` 更名为 **`dsh-file-tree`**；旧包名 `1.0.1` 保留在 npm，但不再更新。
 - 更早的 1.1.0 / 1.2.0 编号（旧包名下）已废弃，相关 tag 与 Release 已清理。

@@ -3,6 +3,17 @@
 本文件记录所有值得注意的变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 **版本策略：只有用户明确要求发版时才 bump / 打 tag / 建 Release。**
 
+## [1.1.1] - 2026-11-06
+
+### Changed
+
+- 包名改为作用域 **`@guimaxingtian/dsh-file-tree`**：`npm publish` 拒绝裸名 `dsh-file-tree`，
+  报 403「Package name too similar to existing package `dsh-filetree`」（第三方插件的同名近似包）。
+  目录名、tag 前缀（`dsh-file-tree-v*`）、cordis 条目 id、客户端模块 id 都仍是 `dsh-file-tree`，
+  只有 npm 安装名带作用域。
+- `package.json` 增加 `publishConfig.access = "public"`，避免作用域包被默认发成私有。
+- 1.1.0 的 tag / GitHub Release / 市场索引条目保留为历史；npm 上从未发布过 1.1.0。
+
 ## [1.1.0] - 2026-11-06
 
 首个以 **`dsh-file-tree`** 为包名发布的版本；功能上承接 1.0.1 的右键菜单，并补上文件树本身缺失的 Git 视图。

@@ -18,12 +18,11 @@
 |---|---|---|---|
 | `plugins/auto-retry` | `dsh-auto-retry` | 1.0.2 | <https://www.npmjs.com/package/dsh-auto-retry> |
 | `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | 1.0.1 | <https://www.npmjs.com/package/dsh-composer-skill-picker> |
-| `plugins/dsh-file-tree` | 待定 | 1.1.0 | npm 拒收裸名，见下 |
+| `plugins/dsh-file-tree` | `@guimaxingtian/dsh-file-tree` | 1.1.1 | <https://www.npmjs.com/package/@guimaxingtian/dsh-file-tree> |
 
-> **文件树插件的 npm 发布被阻塞**：npm 的包名相似度检查把 `dsh-file-tree` 判定为
-> 与已有的第三方包 `dsh-filetree`（mdikarev 的 Workspace file tree panel）过于相似，直接返回 403，
-> 并建议改用作用域包名。因此 1.1.0 目前只通过 **git tag / GitHub Release / 市场索引** 分发；
-> 包名定下来后补发 npm 即可，功能完全一致。
+> **为什么带作用域**：npm 的包名相似度检查把裸名 `dsh-file-tree` 判定为与第三方包
+> `dsh-filetree`（mdikarev 的 Workspace file tree panel）过于相似，直接返回 403 并建议改用作用域包名。
+> 目录名、tag 前缀（`dsh-file-tree-v*`）、市场索引条目 id 仍是 `dsh-file-tree`，只有 npm 安装名带作用域。
 > 旧包 `dsh-file-tree-context-menu@1.0.1`（含旧右键菜单、无 Git 状态）仍在 npm 且可安装，但已停止更新。
 
 在 DSH 里装：**Web 侧边栏 → Plugins → npm 安装页 → 填包名**，例如：
@@ -32,7 +31,7 @@
 dsh-auto-retry
 ```
 
-要钉版本就填 `dsh-auto-retry@1.0.2`。
+要钉版本就填 `dsh-auto-retry@1.0.2`、`@guimaxingtian/dsh-file-tree@1.1.1`。
 
 命令行等价（仅把包拉到本地，不注册进 DSH）：
 
@@ -73,7 +72,7 @@ git rev-parse auto-retry-v1.0.2^{commit}
 1. 启用插件市场 bundle：@deepseek-ai/dsh-experimental-plugin-market-bundle（默认关闭）
    Web 侧边栏 Plugins 页 → 或 patch 里加 include 行 → 重载
 2. 添加索引 URL：https://mark930209.github.io/GoDSH/market-index.json
-3. Discover → 安装 auto-retry / composer-skill-picker / dsh-file-tree
+3. Discover → 安装 auto-retry / composer-skill-picker / dsh-file-tree（条目名带作用域是因为 npm 包名）
 4. 重启 DSH，确认 Plugins 页对应条目为 active
 
 > 索引已收录 `dsh-file-tree@1.1.0`（旧条目 `dsh-file-tree-context-menu` 因目录改名不再列出，

@@ -69,15 +69,45 @@ jobs:
           # make-market-index.mjs 只收录"有发布 tag"的插件，并把每个插件的 commit
           # 钉在它自己的 tag 上，所以这里不需要也不应该传 --commit（否则会把其他
           # 未发布插件指向 HEAD）。
-          git fetch origin main --tags
-          git checkout -B main origin/main
-          node scripts/make-market-index.mjs
+          #
+          # Every command that can fail reports WHY through a GitHub annotation:
+          # job logs need authentication, annotations are public, so a red run
+          # carries its own diagnosis.
+          fail() {
+            printf '::error::%s: %s\n' "$1" "$(tr '\n' ' ' < "$2" | cut -c1-1600)"
+            exit 1
+          }
+
+          git fetch origin +refs/heads/main:refs/remotes/origin/main --tags --force \
+            > /tmp/fetch.log 2>&1 || fail "git fetch failed" /tmp/fetch.log
+          git checkout -B main origin/main > /tmp/checkout.log 2>&1 \
+            || fail "checkout main failed" /tmp/checkout.log
+
+          node scripts/make-market-index.mjs > /tmp/index.log 2>&1 \
+            || fail "make-market-index failed" /tmp/index.log
+          tail -n 5 /tmp/index.log
+
           if git diff --quiet -- docs/market-index.json; then
             echo "市场索引无变化"
             exit 0
           fi
+          echo "索引有变化，准备提交："
+          git diff --stat -- docs/market-index.json
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add docs/market-index.json
-          git commit -m "chore: refresh market index for ${{ steps.meta.outputs.tag }} [skip ci]"
-          git push origin HEAD:main
+          git commit -m "chore: refresh market index for ${{ steps.meta.outputs.tag }} [skip ci]" \
+            > /tmp/commit.log 2>&1 || fail "git commit failed" /tmp/commit.log
+
+          # A plain push can race a human push to main; retry once on the
+          # rebased head before giving up, and always surface the reason.
+          if ! git push origin HEAD:main > /tmp/push.log 2>&1; then
+            git fetch origin +refs/heads/main:refs/remotes/origin/main --force \
+              > /tmp/fetch2.log 2>&1 || fail "git fetch (retry) failed" /tmp/fetch2.log
+            git rebase origin/main > /tmp/rebase.log 2>&1 \
+              || { git rebase --abort || true; fail "git rebase failed" /tmp/rebase.log; }
+            git push origin HEAD:main > /tmp/push2.log 2>&1 \
+              || fail "git push failed" /tmp/push2.log
+          fi
+          echo "已把刷新后的索引推回 main"
