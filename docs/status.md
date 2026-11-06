@@ -289,7 +289,46 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 
 已把这条偏好写进用户全局 `~/.dsh/AGENTS.md` 的「命令行工具偏好（RTK）」一节。
 
-**不推荐**写命令改写插件：DSH 的 `read`/`grep`/`glob` 是原生工具不走 shell，插件只能覆盖一半，投入产出不划算。
+### 为什么没写「RTK 自动化插件」（2026-11-06 查证，决定不做）
+
+用户问过能否用插件把 RTK 自动化，免得靠 AGENTS.md 自觉。查了 DSH 的工具注册表类型定义
+（`@deepseek-ai/dsh-tools` 的 `lib/types/index.d.ts`），结论是**一半做不到、一半不值得**：
+
+| 钩子 | 能力 | 能否用于 RTK |
+|---|---|---|
+| `tools/pre-execute` | `allow` / `deny` / `ask` | **不能改参数** |
+| `tools/execute` | 环绕执行 | **只能改 `exec.signal`**，调用标识不可变 |
+| `tools/post-execute` | `accept`（可换 `content`）/ `block` | 能换结果，但命令已跑完 |
+
+框架原文（`index.d.ts:402-407`）：
+
+> Pre-dispatch decision. `allow` runs the call; `deny` materializes an error; `ask` runs only
+> after an approval service returns `allowed-once` ... **Input rewriting is excluded because
+> arguments are already logged and presented.**
+
+以及 `tools/execute` 的说明：
+
+> wrappers may change only `exec.signal`, while call identity remains immutable.
+
+所以「插件把 `git log` 悄悄改写成 `rtk git log`」是**框架层面禁止**的，不是保守估计。
+参数已经记进日志并展示给用户，事后偷改会让记录对不上。
+
+留给插件的只剩「事后替换结果」，但命令已经以原始形式跑完，要拿压缩版只能再跑一次 `rtk`
+（每条 +110ms），或走 stdin。而 **stdin 路线有丢数据风险**，实测：
+
+| 方式 | 输入 | 输出 | 说明 |
+|---|---|---|---|
+| `git log -20 \| rtk pipe -f git-log` | 17,512 字符 | 298 字符（"省 98%"） | **20 个 commit 只剩 1 个**，其余进 `[+254 lines omitted]` —— 这是丢内容，不是压缩 |
+| `rtk git log -20`（直接代理） | 16,879 | 6,310（省 63%） | 保留全部 20 条，只截每条正文 |
+
+**结论：不做。** 理由三条：
+1. 收益面窄 —— RTK 只覆盖 shell，会话 token 大头是 `read` 读文件与工具结果；
+2. 要么重跑（+110ms/条，还得维护「哪些命令只读可重跑」的白名单），要么丢内容；
+3. DSH 已有 spill-policy（大输出落盘）与 tool-result-pruner，做的是同一件事，重复建设。
+
+若将来仍要做，最小可行设计：`tools/post-execute` 判断 `exec.name === 'pwsh'` 且命令命中
+**只读白名单**（`git log` / `git status` / `git diff --stat`），重跑 `rtk` 后替换 `content`，
+并在开头标注「已压缩」。
 
 ### LSP 级代码查询（真正的「快查询 + 省 token」）
 
