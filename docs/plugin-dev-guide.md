@@ -72,6 +72,13 @@ window.__ModuleLoader__.load({
 > 忘了改 `client.js` 的 `id`，两边就对不上，模块解析抛错，**整个客户端插件加载失败**。
 > 加作用域前缀（`@scope/name`）时尤其容易漏。
 > `node scripts/validate-plugins.mjs` 现在会校验这条契约。
+>
+> **同一个 bundle 被加载两次会炸掉整个启动**：profile 里若同时留着旧名与新名的两条 bundle
+> 条目（都指向同一份源码），浏览器会把 `client.js` 执行两遍，第二次触发
+> `client-modules: duplicate factory registration`，`web boot` 直接失败（白屏 + 启动报错，
+> 不是这一个插件坏掉而已）。所以客户端注册要写成幂等：
+> `try { __ModuleLoader__.load(reg) } catch (e) { 只吞 duplicate，其它照抛 }`。
+> 排查方法：看 profile `package.json` 的 `dsh.profile.bundles` 是否同一插件出现两遍。
 
 ## 3. 常用插槽与 props
 

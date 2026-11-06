@@ -3,6 +3,17 @@
 本文件记录所有值得注意的变更，格式参考 [Keep a Changelog](https://keepachangelog.com/zh-CN/)。
 **版本策略：只有用户明确要求发版时才 bump / 打 tag / 建 Release。**
 
+## [1.1.3] - 2026-11-06
+
+### Fixed
+
+- **同一 bundle 在 profile 里出现两次时不再拖垮整个 Web 启动**：这种情况下客户端脚本会被执行两遍，
+  第二遍触发 `client-modules: duplicate factory registration`，而这个错误会让 `web boot` 直接失败
+  （整页白屏 / 启动报错）。现在模块注册包了一层守卫：重复注册只记一条 warning 并忽略，
+  其它错误照常抛出。
+- 客户端注册改为 `const MODULE_ID` + `registerModule()`，模块 id 与包名的对应关系集中在一处，
+  `validate-plugins.mjs` 仍然校验两者一致。
+
 ## [1.1.2] - 2026-11-06
 
 ### Fixed

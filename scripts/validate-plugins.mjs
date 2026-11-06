@@ -107,11 +107,12 @@ for (const name of names) {
   // plugin silently fails to load — catch it here instead of at runtime.
   if (pkg && pkg.dsh && pkg.dsh.client !== undefined && typeof pkg.name === 'string' && existsSync(join(dir, 'client.js'))) {
     const source = readFileSync(join(dir, 'client.js'), 'utf8');
-    const registered = /__ModuleLoader__\.load\(\s*\{[\s\S]{0,2000}?\bid:\s*'([^']+)'/u.exec(source);
+    const registered = /const\s+MODULE_ID\s*=\s*'([^']+)'/u.exec(source)
+      ?? /__ModuleLoader__\.load\(\s*\{[\s\S]{0,2000}?\bid:\s*'([^']+)'/u.exec(source);
     if (registered === null) {
-      problems.push('client.js 没有用 __ModuleLoader__.load({ id }) 注册模块');
+      problems.push('client.js 没有声明 const MODULE_ID = \'<包名>\'（客户端模块 id 契约）');
     } else if (registered[1] !== pkg.name) {
-      problems.push('client.js 的模块 id "' + registered[1] + '" 与包名 "' + pkg.name + '" 不一致');
+      problems.push('client.js 的 MODULE_ID "' + registered[1] + '" 与包名 "' + pkg.name + '" 不一致');
     }
   }
 

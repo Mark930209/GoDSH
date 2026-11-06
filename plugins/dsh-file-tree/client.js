@@ -32,12 +32,36 @@
  * Mention text mirrors the composer file intake's `formatFileMention` grammar
  * (workspace-relative, trailing `/` for folders, quoted on whitespace).
  */
-window.__ModuleLoader__.load({
-  // The module-system id MUST equal the npm package name: the Host builds its
-  // boot manifest rows from the loader entry's `name` (which the bundle patch
-  // sets to this package name) and imports that id in the browser. A mismatch
-  // here makes the client half unresolvable — the whole plugin fails to load.
-  id: '@guimaxingtian/dsh-file-tree',
+/** Module-system id; it MUST equal the npm package name (see `registerModule`). */
+const MODULE_ID = '@guimaxingtian/dsh-file-tree';
+
+/**
+ * Register this bundle's client module.
+ *
+ * The Host builds its boot manifest rows from the loader entry's `name` — the
+ * bundle patch sets that to this package name — and the browser imports the
+ * same id. Registering under any other id makes the client half unresolvable,
+ * and an unreachable client half aborts the whole web boot, not just this
+ * plugin.
+ *
+ * A profile that lists the same bundle twice (a stale `dsh-file-tree` link
+ * left next to `@guimaxingtian/dsh-file-tree`) serves this file twice, and
+ * the second execution would throw "duplicate factory registration" and take
+ * the entire boot down with it. That case is logged and ignored: the first
+ * registration is the one the manifest asks for.
+ */
+function registerModule(factoryRegistration) {
+  try {
+    window.__ModuleLoader__.load(factoryRegistration);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!/duplicate factory registration/i.test(message)) throw error;
+    console.warn('[dsh-file-tree] ignoring a duplicate module registration: ' + message);
+  }
+}
+
+const moduleRegistration = {
+  id: MODULE_ID,
   factory(require) {
     const React = require('react');
     const h = React.createElement;
@@ -1836,4 +1860,6 @@ window.__ModuleLoader__.load({
 
     return { inject: ['slots', 'locale', 'remote', 'remote.session', 'sidebarRight'], apply };
   }
-});
+};
+
+registerModule(moduleRegistration);
