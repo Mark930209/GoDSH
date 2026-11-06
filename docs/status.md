@@ -62,6 +62,18 @@
 
 ## 已完成（时间线）
 
+- **2026-11-06 · `dsh-file-tree` 二次打磨：定位改「文件树增强」+ 未推送可见**。
+  - **定位**：市场标题从「文件树右键菜单 / File Tree Context Menu」改为
+    「文件树增强 / File Tree Enhancements」，说明改成以文件树 Git 视图为主、右键菜单为辅。
+  - **未推送状态**：文件页头注册 `sidebar.right.tab.files.actions` 槽位（独立 slot id
+    `dsh-file-tree.sync`），渲染分支胶囊：`↑N` 橙=本地有提交未推送、`↓N` 蓝=远程有未拉取、
+    `✓`=已同步、`◎`=无上游分支；点击强制刷新，右键打开该工作区 Git 菜单。
+  - **数据来源**：仍是一次 `git status --porcelain=v2 --branch --ahead-behind`；Host 快照新增
+    `hasUpstream`/`upstream`，用来区分「已同步」和「从未 push 过」——后者绝不能显示成 ✓。
+  - **验证**：Host 路由测试新增 push 到 bare 远程（ahead=1）、`--unset-upstream`（hasUpstream=false）
+    两段；Client 测试覆盖 synced/unpushed/behind/diverged/local/detached 六种语义与胶囊渲染。
+  - **未发版**：版本仍 1.0.1，未打 tag、未刷新市场索引。
+
 - **2026-11-06 · 安装同事的第三方插件 `dsh-llm-text-tools`（内网 git）**。用户给的是
   `http://git.51vr.local/xuyifei/dsh-llm-text-tools`（本人仓库，0.2.0，HEAD `b53c892`）。
   - **放哪**：克隆到 **`E:\Projects\DSH_Plugins_Ext\dsh-llm-text-tools`**。同事的包不进本仓库、

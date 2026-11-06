@@ -1,11 +1,12 @@
-# dsh-file-tree · 文件树右键菜单
+# dsh-file-tree · 文件树增强
 
-给 DeepSeek Harness Web UI 的工作区**文件树**与**交付物列表**加右键菜单，并在文件树上显示 Git 改动状态：
+给 DeepSeek Harness Web UI 的文件树补上原生没有的 Git 视图，并在**文件树**与**交付物列表**上提供右键菜单：
 
-| 菜单项 / 状态 | 行为 |
+| 功能 | 行为 |
 |---|---|
 | Git 改动着色 | 读取工作区的 `git status --porcelain=v2 --branch --ahead-behind -z --untracked-files=all`，按状态给文件名着色：已修改=橙、新增/未跟踪/已复制=绿、已删除/冲突=红、重命名=蓝；目录按子项聚合，混合时取最严重的一种 |
-| Git 字母徽标 | 行右侧显示 `M/A/D/U/R/C/!` 小徽标；冲突加粗，悬停可看状态说明 |
+| Git 字母徽标 | 行内显示 `M/A/D/U/R/C/!` 小徽标；冲突加粗，悬停可看状态说明 |
+| 分支与推送状态（页头） | 文件页头右侧一个胶囊：分支名 + `↑N`（本地有提交未推送，橙色）/ `↓N`（远程有提交未拉取，蓝色）/ `✓`（已同步）/ `◎`（无上游分支）；点一下立即刷新，点右键打开该工作区的 Git 菜单 |
 | 菜单 Git 摘要 | 菜单顶部显示分支（或游离 HEAD / 合并、变基等操作）和改动数量、领先/落后远程的提交数，以及当前文件/目录的暂存状态 |
 | 加入对话 | 在输入框光标处插入**引用芯片**（与内置 `@` 选文件一致）；芯片不可用时回退为 `@路径` 纯文本并提示「已插入文本（非芯片）」 |
 | 复制 @ 引用 | 复制 `@相对路径`（与引用芯片的剪贴板格式一致，可直接粘贴进对话） |
@@ -29,6 +30,11 @@
 > 本机打开/预览/终端依赖 DSH 桌面端能力；纯 Web 部署会隐藏相应分组。
 > 文件操作走 Host 路由 `POST /api/dft.fileops`，Git 状态走 `POST /api/dft.git`；
 > 文件操作严格限制在传入的工作区根目录内，Git 路由只读取传入的绝对目录，并带 15 秒超时和 4 MB 输出上限。
+
+> **未推送怎么看出来**：页头胶囊的 `↑N` 就是「本分支有多少提交还没推到上游」。
+> 判定完全来自 `git status --porcelain=v2 --branch` 的 `branch.ab` 与 `branch.upstream`：
+> 有上游且 `ahead` > 0 才显示橙色 `↑N`，所以已经推送完的分支不会误报；没有上游（从未 push 过、
+> 或刚 `--unset-upstream`）显示 `◎` 而不是 `✓`，避免让人误以为"都推上去了"。
 
 支持右键的位置：文件树行、交付文件卡片、`已编辑 N 个文件` 改动卡片、审阅侧边栏的文件选择按钮。
 （限制：审阅页的**下拉菜单项**本身不携带路径信息，不在支持范围。）
@@ -71,7 +77,7 @@ git+https://github.com/Mark930209/GoDSH.git#<40位commit>&path:/plugins/dsh-file
 ## 目录结构
 
 ```
-client.js              客户端插件（右键菜单、多选、表单、引用插入、Git 状态装饰）
+client.js              客户端插件（Git 着色/徽标/页头胶囊、右键菜单、多选、表单、引用插入）
 index.js               Host 半部（POST /api/dft.fileops：新建/重命名/回收站/终端；POST /api/dft.git：Git 状态）
 cordis.patch.yml       bundle patch（插入本插件的行）
 package.json           清单：exports / dsh.bundle.patch / dsh.client
@@ -90,8 +96,11 @@ CHANGELOG.md           版本记录
 - 本机打开调用 `ctx.remote.session.openWorkspacePath({ path, action })` 与 `workspacePathApplications({ path })`。
 - 新建/重命名/删除/终端由 Host 路由处理，使用 Node `fs/promises` + `path`，删除走
   `Microsoft.VisualBasic.FileIO.FileSystem` 的 `SendToRecycleBin`。
-- Git 状态由 Host 直接调用系统 `git`（`execFile`，`GIT_OPTIONAL_LOCKS=0`，15 秒超时、4 MB 上限），
-  不依赖 `dsh-better-sidebar`；客户端共享一份状态、20 秒轮询，并在窗口聚焦、菜单打开和文件操作后刷新。
+- Git 状态由 Host 直接调用系统 `git`（`execFile`，`GIT_OPTIONAL_LOCKS=0`、`GIT_LITERAL_PATHSPECS=1`，
+  15 秒超时、4 MB 上限），不依赖 `dsh-better-sidebar`；客户端整棵树共享一份状态、20 秒轮询，
+  并在窗口聚焦、菜单打开、页头胶囊点击、切换会话工作区和文件操作后强制刷新。
+- 页头胶囊注册在宿主的 `sidebar.right.tab.files.actions` 槽位（文件页头右侧），用独立的 slot id
+  `dsh-file-tree.sync`，与只做桥接的 `ComposerBridge` 分开，互不影响。
 - 只依赖宿主提供的 React 与标准 slot props，**无第三方运行时依赖**。
 
 ## 许可

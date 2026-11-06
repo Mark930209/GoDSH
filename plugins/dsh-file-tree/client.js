@@ -107,6 +107,10 @@ window.__ModuleLoader__.load({
       'git.unknownBranch': '未知分支',
       'git.ahead': '领先远程 {count} 个提交',
       'git.behind': '落后远程 {count} 个提交',
+      'git.synced': '已与远程同步',
+      'git.localOnly': '无上游分支',
+      'git.unpushed': '有 {count} 个提交未推送',
+      'git.notPushed': '未推送',
       'git.folder': '文件夹',
       'git.staged': '已暂存',
       'git.unstaged': '未暂存',
@@ -185,6 +189,10 @@ window.__ModuleLoader__.load({
       'git.unknownBranch': 'Unknown branch',
       'git.ahead': '{count} ahead of upstream',
       'git.behind': '{count} behind upstream',
+      'git.synced': 'Up to date with upstream',
+      'git.localOnly': 'No upstream branch',
+      'git.unpushed': '{count} commits not pushed',
+      'git.notPushed': 'Not pushed',
       'git.folder': 'folder',
       'git.staged': 'staged',
       'git.unstaged': 'unstaged',
@@ -250,6 +258,24 @@ window.__ModuleLoader__.load({
       '.dft-git-entry{display:flex;align-items:center;gap:6px;padding:0 10px 6px;',
       'color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:1.5;}',
       '.dft-git-entry-detail{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+      '.dft-git-ahead{color:var(--dsw-alias-state-warn-primary);font-weight:600;}',
+      '.dft-git-behind{color:var(--dsw-alias-state-business-primary);font-weight:600;}',
+      '.dft-git-synced{color:var(--dsw-alias-state-success-primary);}',
+      '.dft-git-muted{color:var(--dsw-alias-label-tertiary);}',
+      // The files-header pill: branch plus how far the branch is from its upstream.
+      '.dft-sync{display:inline-flex;align-items:center;gap:5px;flex:none;height:22px;',
+      'margin-left:2px;padding:0 8px;border-radius:11px;border:1px solid var(--dsw-alias-border-l2);',
+      'background:var(--dsw-alias-bg-layer-1);color:var(--dsw-alias-label-secondary);',
+      'font:inherit;font-size:11px;line-height:1;white-space:nowrap;cursor:pointer;}',
+      '.dft-sync:hover{background:var(--dsw-alias-bg-layer-2);color:var(--dsw-alias-label-primary);}',
+      '.dft-sync[data-dft-sync="unpushed"]{border-color:var(--dsw-alias-state-warn-primary);}',
+      '.dft-sync[data-dft-sync="unpushed"] .dft-sync-ahead{color:var(--dsw-alias-state-warn-primary);font-weight:700;}',
+      '.dft-sync-branch{max-width:88px;overflow:hidden;text-overflow:ellipsis;',
+      'color:var(--dsw-alias-label-primary);font-weight:600;}',
+      '.dft-sync-ahead{color:var(--dsw-alias-label-secondary);}',
+      '.dft-sync-behind{color:var(--dsw-alias-state-business-primary);}',
+      '.dft-sync-clean{color:var(--dsw-alias-state-success-primary);}',
+      '.dft-sync-muted{color:var(--dsw-alias-label-tertiary);font-weight:400;}',
       '.ZaWTnW_name[data-dft-git]{font-weight:500;}',
       '.ZaWTnW_name[data-dft-git="modified"]{color:var(--dsw-alias-state-warn-primary);}',
       '.ZaWTnW_name[data-dft-git="added"],.ZaWTnW_name[data-dft-git="untracked"],.ZaWTnW_name[data-dft-git="copied"]{color:var(--dsw-alias-state-success-primary);}',
@@ -302,9 +328,10 @@ window.__ModuleLoader__.load({
     function publish() {
       for (const listener of listeners) listener();
     }
-    /** Repaint the open menu after non-state data (the git reading) changed. */
-    function repaintMenu() {
-      if (state.menu === null) return;
+    /** Repaint the open menu and the header pill after the git reading changed. */
+    function repaintGit() {
+      // A fresh object identity is what makes `useSyncExternalStore` re-render,
+      // even when only the shared git maps changed.
       state = { menu: state.menu, feedback: state.feedback };
       publish();
     }
@@ -602,6 +629,8 @@ window.__ModuleLoader__.load({
         branch: snapshot.branch,
         detached: snapshot.detached === true,
         operation: snapshot.operation,
+        hasUpstream: snapshot.hasUpstream === true,
+        upstream: typeof snapshot.upstream === 'string' ? snapshot.upstream : '',
         ahead: typeof snapshot.ahead === 'number' ? snapshot.ahead : 0,
         behind: typeof snapshot.behind === 'number' ? snapshot.behind : 0,
         files,
@@ -613,11 +642,26 @@ window.__ModuleLoader__.load({
       if (root === '' || root === undefined || root === null) return undefined;
       return gitSnapshots.get(gitKey(root));
     }
+    /**
+     * How far the checked-out branch is from its upstream. `unpushed` is the
+     * answer the file tree never had: commits that exist only on this machine.
+     */
+    function gitSyncOf(context) {
+      if (context === undefined || context === null || !context.isRepo) return null;
+      const ahead = typeof context.ahead === 'number' ? context.ahead : 0;
+      const behind = typeof context.behind === 'number' ? context.behind : 0;
+      if (context.detached === true) return { state: 'detached', ahead, behind };
+      if (context.hasUpstream !== true) return { state: 'local', ahead, behind };
+      if (ahead > 0) return { state: behind > 0 ? 'diverged' : 'unpushed', ahead, behind };
+      if (behind > 0) return { state: 'behind', ahead: 0, behind };
+      return { state: 'synced', ahead: 0, behind: 0 };
+    }
     /** Whether two readings are the same, so an unchanged poll skips a repaint. */
     function sameGitIndex(left, right) {
       if (left === right) return true;
       if (left.isRepo !== right.isRepo || left.branch !== right.branch || left.detached !== right.detached
-        || left.operation !== right.operation || left.ahead !== right.ahead || left.behind !== right.behind) return false;
+        || left.operation !== right.operation || left.hasUpstream !== right.hasUpstream || left.upstream !== right.upstream
+        || left.ahead !== right.ahead || left.behind !== right.behind) return false;
       if (left.files.size !== right.files.size || left.dirs.size !== right.dirs.size) return false;
       for (const [key, value] of left.files) {
         const other = right.files.get(key);
@@ -645,12 +689,16 @@ window.__ModuleLoader__.load({
         // A 401 page or a proxy error is HTML, not JSON; treat it as "unknown".
         const data = await response.json().catch(() => null);
         if (data !== null && data.ok === true && data.isRepo === false) {
-          const next = { isRepo: false, branch: null, detached: false, operation: null, files: new Map(), dirs: new Map() };
+          const next = {
+            isRepo: false, branch: null, detached: false, operation: null,
+            hasUpstream: false, upstream: '', ahead: 0, behind: 0,
+            files: new Map(), dirs: new Map()
+          };
           const previous = gitSnapshots.get(key);
           if (previous === undefined || previous.isRepo !== false) {
             gitSnapshots.set(key, next);
             syncGitDom();
-            repaintMenu();
+            repaintGit();
           }
           return;
         }
@@ -658,7 +706,7 @@ window.__ModuleLoader__.load({
           if (gitSnapshots.has(key)) {
             gitSnapshots.delete(key);
             syncGitDom();
-            repaintMenu();
+            repaintGit();
           }
           return;
         }
@@ -681,7 +729,7 @@ window.__ModuleLoader__.load({
         if (previous !== undefined && sameGitIndex(previous, next)) return;
         gitSnapshots.set(key, next);
         syncGitDom();
-        repaintMenu();
+        repaintGit();
       } catch (error) {
         warn('git status failed', error);
       } finally {
@@ -818,8 +866,27 @@ window.__ModuleLoader__.load({
           ? h('span', { key: 'count', className: 'dft-git-clean' }, t('git.clean'))
           : h('span', { key: 'count', className: 'dft-git-count' }, t('git.changedCount', { count: changed }))
       ];
-      if (context.ahead > 0) children.push(h('span', { key: 'ahead', className: 'dft-git-count', title: t('git.ahead', { count: context.ahead }) }, '↑' + context.ahead));
-      if (context.behind > 0) children.push(h('span', { key: 'behind', className: 'dft-git-count', title: t('git.behind', { count: context.behind }) }, '↓' + context.behind));
+      const sync = gitSyncOf(context);
+      if (sync !== null && sync.ahead > 0) {
+        children.push(h('span', {
+          key: 'ahead',
+          className: 'dft-git-count dft-git-ahead',
+          title: t('git.ahead', { count: sync.ahead })
+        }, '↑' + sync.ahead));
+      }
+      if (sync !== null && sync.behind > 0) {
+        children.push(h('span', {
+          key: 'behind',
+          className: 'dft-git-count dft-git-behind',
+          title: t('git.behind', { count: sync.behind })
+        }, '↓' + sync.behind));
+      }
+      if (sync !== null && sync.state === 'synced') {
+        children.push(h('span', { key: 'sync', className: 'dft-git-count dft-git-synced', title: t('git.synced') }, '✓'));
+      }
+      if (sync !== null && sync.state === 'local') {
+        children.push(h('span', { key: 'sync', className: 'dft-git-count dft-git-muted', title: t('git.localOnly') }, '◎'));
+      }
       const order = ['conflict', 'deleted', 'renamed', 'modified', 'added', 'untracked', 'copied'];
       for (const tone of order) {
         const value = counts.get(tone) || 0;
@@ -884,6 +951,80 @@ window.__ModuleLoader__.load({
       const trimmed = relative.replace(/\/+$/, '');
       const base = trimmed.split('/').pop() || trimmed;
       return kind === 'directory' ? base + '/' : base;
+    }
+
+    /**
+     * The files-header pill: the branch and its distance from the upstream.
+     * The native header only shows the folder path, so "did I push?" had no
+     * answer anywhere in the tree; this slot is the header's own right side.
+     */
+    function GitSyncPill() {
+      // Subscribe so the pill repaints when a poll lands; the reading itself is
+      // keyed by the session cwd that the bridge captured.
+      React.useSyncExternalStore(subscribe, snapshot, snapshot);
+      return gitSyncPillNode(sessionCwd);
+    }
+    /** Pure renderer for the pill, kept separate so tests can drive it. */
+    function gitSyncPillNode(root) {
+      const context = gitContext(root);
+      if (context === undefined || !context.isRepo) return null;
+      const sync = gitSyncOf(context);
+      if (sync === null) return null;
+      const branch = context.detached === true
+        ? t('git.detached')
+        : (typeof context.branch === 'string' && context.branch !== '' ? context.branch : t('git.unknownBranch'));
+      const children = [h('span', { key: 'branch', className: 'dft-sync-branch', title: branch }, branch)];
+      let state = 'synced';
+      let label;
+      let title;
+      if (sync.state === 'detached') {
+        state = 'unknown';
+        label = '—';
+        title = t('git.detached');
+      } else if (sync.state === 'local') {
+        state = 'local';
+        label = '◎';
+        title = t('git.localOnly');
+      } else if (sync.ahead > 0) {
+        state = 'unpushed';
+        label = '↑' + sync.ahead;
+        title = t('git.unpushed', { count: sync.ahead });
+      } else if (sync.behind > 0) {
+        state = 'behind';
+        label = '↓' + sync.behind;
+        title = t('git.behind', { count: sync.behind });
+      } else {
+        label = '✓';
+        title = t('git.synced');
+      }
+      children.push(h('span', {
+        key: 'delta',
+        className: state === 'unpushed' ? 'dft-sync-ahead'
+          : state === 'behind' ? 'dft-sync-behind'
+            : state === 'synced' ? 'dft-sync-clean' : 'dft-sync-muted',
+        title
+      }, label));
+      if (sync.ahead > 0 && sync.behind > 0) {
+        children.push(h('span', {
+          key: 'behind',
+          className: 'dft-sync-behind',
+          title: t('git.behind', { count: sync.behind })
+        }, '↓' + sync.behind));
+      }
+      const summary = title + ' · ' + branch;
+      return h('button', {
+        type: 'button',
+        className: 'dft-sync',
+        'data-dft-sync': state,
+        title: summary,
+        'aria-label': summary,
+        onClick: () => { void refreshGitStatus(root, true); },
+        onContextMenu: (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          openMenu({ x: event.clientX, y: event.clientY, root, path: root, kind: 'directory' });
+        }
+      }, children);
     }
 
     // ---------------------------------------------------------- actions
@@ -1290,7 +1431,13 @@ window.__ModuleLoader__.load({
           inputActions = props.inputActions;
         }
         if (typeof props.sessionId === 'string' && props.sessionId !== '') sessionId = props.sessionId;
-        if (typeof cwdValue === 'string' && cwdValue !== '') sessionCwd = cwdValue;
+        if (typeof cwdValue === 'string' && cwdValue !== '' && cwdValue !== sessionCwd) {
+          sessionCwd = cwdValue;
+          // The header pill is keyed by this root: repaint it and read the new
+          // workspace's branch right away instead of waiting for the next poll.
+          repaintGit();
+          void refreshGitStatus(cwdValue, true);
+        }
       });
       return null;
     }
@@ -1660,7 +1807,8 @@ window.__ModuleLoader__.load({
 
       // Invisible bridges that capture the composer's InputActions from the
       // standard provide channel, from the file tab and from the composer row.
-      const registration = (name, component, order) => () => ctx.slots.register({ name, id: 'dsh-file-tree', order }, component);
+      const registration = (name, component, order, id) => () => ctx.slots.register({ name, id: id === undefined ? 'dsh-file-tree' : id, order }, component);
+      ctx.slots.inject('sidebar.right.tab.files.actions', registration('sidebar.right.tab.files.actions', GitSyncPill, 40, 'dsh-file-tree.sync'));
       ctx.slots.inject('sidebar.right.tab.files.actions', registration('sidebar.right.tab.files.actions', ComposerBridge, 90));
       ctx.slots.inject('conversation.input.left', registration('conversation.input.left', ComposerBridge, 90));
       ctx.slots.inject('shell.overlay', registration('shell.overlay', FileTreeContextMenu, 60));

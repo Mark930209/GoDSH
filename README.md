@@ -12,7 +12,7 @@
 |---|---|---|---|
 | [auto-retry](plugins/auto-retry/) | 1.0.1 | `dsh-auto-retry` | Host-only 策略插件：模型请求失败按指数退避重试，整轮仍失败则延时自动续跑同一会话，直到任务完成或达到次数上限；重试时对话里显示「正在重试模型请求（n/6） · Ns」 |
 | [composer-skill-picker](plugins/composer-skill-picker/) | 1.0.1 | `dsh-composer-skill-picker` | 输入框工具行常驻技能下拉框，自动发现项目技能（`.dsh/skills`、`.agents/skills`），选中即插入 `/技能名` |
-| [dsh-file-tree](plugins/dsh-file-tree/) | 1.0.1（未发布） | `dsh-file-tree`（旧 npm：`dsh-file-tree-context-menu`） | 文件树 Git 改动着色/字母徽标 + 右键菜单：查看 Git 状态、加入对话（引用芯片）、复制路径与链接、DSH 内预览、终端打开、AI 总结/解释、新建/重命名/回收站、多选批量 |
+| [dsh-file-tree](plugins/dsh-file-tree/) | 1.0.1（未发布） | `dsh-file-tree`（旧 npm：`dsh-file-tree-context-menu`） | 文件树增强：Git 改动着色/字母徽标/目录聚合，页头胶囊显示分支与**未推送/未拉取提交数**；右键菜单提供加入对话（引用芯片）、复制路径与链接、DSH 内预览、终端打开、AI 总结/解释、新建/重命名/回收站、多选批量 |
 
 ## 安装
 

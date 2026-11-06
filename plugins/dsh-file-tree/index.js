@@ -164,6 +164,8 @@ async function readGitStatus(root) {
     branch: parsed.branch,
     detached: parsed.detached,
     upstream: parsed.upstream,
+    /** Whether the branch tracks an upstream; without one, ahead/behind are meaningless. */
+    hasUpstream: typeof parsed.upstream === 'string' && parsed.upstream !== '',
     ahead: parsed.ahead,
     behind: parsed.behind,
     operation,

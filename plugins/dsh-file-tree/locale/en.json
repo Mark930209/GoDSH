@@ -1,6 +1,6 @@
 {
   "meta": {
-    "title": "File Tree Context Menu",
-    "description": "Paint the workspace file tree with Git branch/change colors and letter badges; right-click a file or folder to inspect its Git state, add it to the conversation, copy paths/links, preview in DSH, open in a terminal, summarize or explain with AI, create/rename/delete entries, or reveal it in the file manager."
+    "title": "File Tree Enhancements",
+    "description": "Add Git awareness to the workspace file tree: changed files are tinted with letter badges, folders aggregate their changes, and the files header shows the branch with its unpushed/unpulled commit counts. Right-clicking a file or folder adds a menu to attach it to the conversation, copy paths/links, preview in DSH, open a terminal, summarize or explain with AI, create/rename/delete entries, and reveal it in the file manager."
   }
 }

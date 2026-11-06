@@ -1,7 +1,7 @@
 {
   "name": "dsh-file-tree",
   "version": "1.0.1",
-  "description": "Right-click files or folders in the workspace file tree and deliverable lists to see Git change status, add them to the conversation, copy paths/links, preview in DSH, open in a terminal, summarize with AI, create/rename/delete entries, or reveal them in the file manager.",
+  "description": "Git-aware workspace file tree: change tints and letter badges, directory aggregation, and a files-header pill showing the branch with its unpushed/unpulled counts. Right-click files or folders for a menu that adds them to the conversation, copies paths/links, previews in DSH, opens a terminal, summarizes with AI, creates/renames/deletes entries, or reveals them in the file manager.",
   "type": "module",
   "author": "Mark930209 <guimaxingtian@163.com>",
   "license": "MIT",
@@ -12,6 +12,9 @@
     "bundle",
     "context-menu",
     "file-tree",
+    "explorer",
+    "branch",
+    "unpushed",
     "mention",
     "workspace",
     "open-in-app",
