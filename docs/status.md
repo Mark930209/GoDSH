@@ -72,8 +72,17 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。
     existing package `dsh-filetree`」。于是发 **1.1.1**：包名改为 `@guimaxingtian/dsh-file-tree`
     （加 `publishConfig.access=public`），tag `dsh-file-tree-v1.1.1`，npm 与索引随之更新。
   - **1.1.0 没有 npm 版本**：那次的 tag / Release / 索引条目保留，但 npm 上不存在 1.1.0。
-  - **CI 已知问题**：`Release plugin` 的「Refresh market index」步骤自 2026-11-04 起每次都失败
-    （Release 本身正常），索引一直靠 `release.mjs` 本地刷新，页面索引仍是最新的。
+  - **1.1.1 发布结果**：`npm publish` 返回 `+ @guimaxingtian/dsh-file-tree@1.1.1`，
+    tarball 已可下载（32 KB）；registry 的 packument 仍在处理中（`npm view` 暂时 404），
+    过几分钟会自动可见，无需重发。
+  - **CI 已知问题（已在 1.1.1 修复）**：`Release plugin` 的「Refresh market index」步骤自
+    2026-11-04 起每次都失败。推断原因是 `actions/checkout` 检出 tag 时只配了窄 refspec，
+    `git fetch origin main --tags` 不会生成 `refs/remotes/origin/main`，于是
+    `git checkout -B main origin/main` 直接退出 1。修法：改成显式 refspec
+    `+refs/heads/main:refs/remotes/origin/main`，并把每个可能失败的命令包成 `::error::` 注解
+    （job 日志要鉴权，注解公开可读，红叉能自带原因）。1.1.1 的 run 已 **success**。
+  - **profile 同步改名**：`dsh.profile.bundles` 与依赖键改成 `@guimaxingtian/dsh-file-tree`，
+    junction 指到同一源码目录；`pnpm-lock.yaml` importer 同步。`require.resolve` 实测可解析。
   - `docs/market-index.json` 已刷新：条目从旧名 `dsh-file-tree-context-menu@1.0.1`
     变为 `dsh-file-tree@1.1.0`（旧目录已改名，索引不再收录旧条目，但 npm 旧包仍可安装）。
   - 推 `main` + tag 后由 `release.yml` 建 GitHub Release 并二次刷新索引，`pages.yml` 部署 Pages。
