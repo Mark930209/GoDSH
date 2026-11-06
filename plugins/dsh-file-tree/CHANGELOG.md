@@ -20,6 +20,12 @@
   平时 20 秒轮询；非 Git 仓库静默不显示。
 - 新增 Host 路由 `POST /api/dft.git`；Git 调用带 15 秒超时、4 MB 输出上限，并设置 `GIT_OPTIONAL_LOCKS=0` 与 `GIT_LITERAL_PATHSPECS=1`。
 
+### Removed
+
+- 移除右键菜单里的「复制 file:// 链接」：该形式在 Windows 中文路径、浏览器安全策略和
+  外部程序里的实际可用性都很差，保留反而增加误点；需要外部可点击地址时用「复制 Markdown 链接」
+  或「复制绝对路径」。对应的 `fileUrlOf` 辅助函数与 `menu.copyFileUrl` 文案一并删除。
+
 ### Changed
 
 - 包名与目录从 `dsh-file-tree-context-menu` 重命名为 **`dsh-file-tree`**；

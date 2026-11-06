@@ -6,7 +6,7 @@
  * changed-files card / review file selector owned by
  * @deepseek-ai/dsh-client-ui-deliverables — opens a small menu that can:
  *   - add the file/folder to the conversation composer as a reference chip,
- *   - copy the @-mention form, file:// URL, Markdown link, absolute/relative path,
+ *   - copy the @-mention form, Markdown link, absolute/relative path,
  *   - preview the file in DSH's right sidebar,
  *   - open it with the default application (a web page lands in the browser),
  *   - reveal it in the OS file manager, or open a terminal at its folder,
@@ -60,7 +60,6 @@ window.__ModuleLoader__.load({
       'menu.aiExplain': '用 AI 解释',
       'ai.summaryPrompt': '请总结这个文件的要点。',
       'ai.explainPrompt': '请解释这个文件的内容和作用。',
-      'menu.copyFileUrl': '复制 file:// 链接',
       'menu.copyMarkdown': '复制 Markdown 链接',
       'menu.newFile': '新建文件',
       'menu.newFolder': '新建文件夹',
@@ -143,7 +142,6 @@ window.__ModuleLoader__.load({
       'menu.aiExplain': 'Explain with AI',
       'ai.summaryPrompt': 'Please summarize the key points of this file.',
       'ai.explainPrompt': 'Please explain the contents and purpose of this file.',
-      'menu.copyFileUrl': 'Copy file:// link',
       'menu.copyMarkdown': 'Copy Markdown link',
       'menu.newFile': 'New file',
       'menu.newFolder': 'New folder',
@@ -515,14 +513,6 @@ window.__ModuleLoader__.load({
     /** Encode one file-address segment, keeping Windows drive colons literal. */
     function encodeSegment(segment) {
       return encodeURIComponent(segment).replace(/%3A/gi, ':');
-    }
-    /** Turn an absolute host path into a clickable file:// URL. */
-    function fileUrlOf(path) {
-      const normalized = toSlashes(path);
-      const encoded = normalized.split('/').map(encodeSegment).join('/');
-      if (/^[A-Za-z]:\//.test(normalized)) return 'file:///' + encoded;
-      if (normalized.startsWith('//')) return 'file:' + encoded;
-      return 'file://' + encoded;
     }
     /** Build a Markdown link whose target is workspace-relative when possible. */
     function markdownLinkOf(kind, relative, absolute, label) {
@@ -1699,7 +1689,6 @@ window.__ModuleLoader__.load({
       children.push(item('delete', t('menu.delete'), () => openFilePrompt('delete', menuState.root, menuState.path, kind)));
 
       children.push(h('div', { key: 'sep-copy', role: 'separator', className: 'dft-sep' }));
-      children.push(item('fileUrl', t('menu.copyFileUrl'), () => runCopy('fileUrl', fileUrlOf(absolute))));
       children.push(item('markdown', t('menu.copyMarkdown'), () => runCopy('markdown', markdownLinkOf(kind, relative, absolute, displayName))));
       children.push(item('absolute', t('menu.copyAbsolute'), () => runCopy('absolute', absolute)));
       children.push(item('relative', t('menu.copyRelative'), () => runCopy('relative', relative)));
