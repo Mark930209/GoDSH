@@ -48,7 +48,7 @@
 
 - 市场索引里每个版本：
   ```json
-  { "version": "1.1.0",
+  { "version": "1.1.1",
     "source": { "type": "git", "url": "https://github.com/Mark930209/GoDSH",
                 "commit": "<40位>", "path": "plugins/dsh-file-tree" },
     "engines": { "dsh": ">=0.2.1-rc.5" } }

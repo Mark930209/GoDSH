@@ -33,7 +33,7 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。
 |---|---|---|---|---|
 | `plugins/auto-retry` | `dsh-auto-retry` | 1.0.2 | `auto-retry-v1.0.2`（`12a89aa`） | link，active |
 | `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | 1.0.1 | `composer-skill-picker-v1.0.1`（`e30c3b2`） | link，active |
-| `plugins/dsh-file-tree` | `@guimaxingtian/dsh-file-tree`（旧名 `dsh-file-tree-context-menu`） | 1.1.1 | `dsh-file-tree-v1.1.1`（见下） | link，active |
+| `plugins/dsh-file-tree` | `@guimaxingtian/dsh-file-tree`（旧名 `dsh-file-tree-context-menu`） | 1.1.1 | `dsh-file-tree-v1.1.1`（`79a80bd`） | link，active（待重启换名） |
 
 - 公共 npm：`dsh-auto-retry` `1.0.2`、`dsh-composer-skill-picker` `1.0.1`、
   `@guimaxingtian/dsh-file-tree` `1.1.1`（裸名 `dsh-file-tree` 被 npm 判为与第三方包

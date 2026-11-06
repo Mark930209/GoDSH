@@ -73,7 +73,7 @@ cordis 条目 id 仍是不带作用域的 `dsh-file-tree`。
 
 ## 版本策略
 
-- 当前版本 **1.1.1**（npm `@guimaxingtian/dsh-file-tree`，tag `dsh-file-tree-v1.1.1`，commit 见发版记录）；**只有用户明确要求发版时才 bump 版本、打 tag、建 Release、刷新市场索引**。
+- 当前版本 **1.1.1**（npm `@guimaxingtian/dsh-file-tree`，tag `dsh-file-tree-v1.1.1`，commit `79a80bd`）；**只有用户明确要求发版时才 bump 版本、打 tag、建 Release、刷新市场索引**。
 - 日常修改只提交代码，不发版、不改版本号。
 - 本插件从 `dsh-file-tree-context-menu` 更名为 **`dsh-file-tree`**；旧包名 `1.0.1` 保留在 npm，但不再更新。
 - 更早的 1.1.0 / 1.2.0 编号（旧包名下）已废弃，相关 tag 与 Release 已清理。

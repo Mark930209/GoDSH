@@ -32,7 +32,7 @@ dsh-composer-skill-picker
 ```powershell
 git+https://github.com/Mark930209/GoDSH.git#12a89aad7f085ba23ea3ad7c1bf2816336337569&path:/plugins/auto-retry
 git+https://github.com/Mark930209/GoDSH.git#e30c3b2a7f6ee07747ec0ff7af920c1e7b91526b&path:/plugins/composer-skill-picker
-git+https://github.com/Mark930209/GoDSH.git#22a14a17ceee240286944ad96f98cd4ba7d90f45&path:/plugins/dsh-file-tree
+git+https://github.com/Mark930209/GoDSH.git#79a80bd6e11927399df42f44f37deee35480bafb&path:/plugins/dsh-file-tree
 ```
 
 **③ 市场索引** — 启用 `@deepseek-ai/dsh-experimental-plugin-market-bundle`，
