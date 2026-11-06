@@ -1,4 +1,4 @@
-# 当前状态（快照 2026-11-04）
+# 当前状态（快照 2026-11-06）
 
 > 新会话进本仓库时，读这一页 + [plugin-dev-guide.md](plugin-dev-guide.md) 即可接续。
 > 安装见 [install.md](install.md)，发版见 [publishing.md](publishing.md)。
@@ -39,6 +39,7 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 | 插件安装方式 | `link:E:/Projects/DSH_Plugins_Dev/plugins/<目录名>` |
 | npm 账号 / token | `guimaxingtian`，`~/.npmrc` 存 `//registry.npmjs.org/:_authToken`（Classic → Automation）；本机默认 registry 是内网镜像 `http://10.66.12.81:4873/`，发布必须显式 `--registry=https://registry.npmjs.org/` |
 | Node / Git / npm | v24.15.0 / 2.46.0 / 11.12.1 |
+| RTK（Rust Token Killer） | `0.45.0`，`C:\Users\congzhisen\.local\bin\rtk.exe`；**未给 DSH 装 hook**（`rtk init` 无 DSH 目标） |
 | 验证基线 | DSH `0.2.1-rc.5`，Windows 桌面端 |
 
 ## 已完成（时间线）
@@ -222,6 +223,66 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
      解析器维护成本。参考插件 `dsh-llm-text-tools` 的 README 立论已过时，不宜直接引用。
 5. 可选：在 npmjs.com 用 2FA 手动删掉三个包的 `0.0.0-stage` 占位版本，让包页干净。
 6. 计划新插件：`node scripts\new-plugin.mjs dsh-xxx`。
+7. **RTK 接入评估（2026-11-06 调研，未动手）** —— 见下节「省 token 工具的调研结论」。
+8. **LSP 级代码查询**（同上节），两条路线待选。
+
+## 省 token 工具的调研结论（2026-11-06）
+
+背景：用户问「有没有 LSP / RTK 这类省 token 或加速代码查询的工具或插件」。以下是本机实测结果，**均未落地，仅备查**。
+
+### 现状：DSH 已内建的轻量化机制
+
+| 机制 | 来源包 | 作用 |
+|---|---|---|
+| `grep` / `glob` / `read` | `dsh-tool-fs-search`、`dsh-tool-fs` | ripgrep 级检索，只回行号+命中行 |
+| 超长输出落盘 | `spill-policy` / `spill-local` | 大结果写文件，上下文只留摘要+路径 |
+| 旧结果裁剪 | `tool-result-pruner` | 剪掉历史轮次的大块工具输出 |
+| 上下文压缩 | `compaction-basic` | 会话过长时压缩 |
+| 上下文隔离 | `subagent` / `workflow` | 检索/审计外包给子代理，主会话不吃 token |
+| 用量观测 | `token-meter` | token 统计 |
+
+**结论：没有符号级（LSP）查询，但通用轻量化机制齐全。** 大输出靠 spill + 子代理隔离，而非压缩命令输出。
+
+### RTK（`rtk-ai/rtk`，Rust Token Killer）
+
+- 本机**已装**：`rtk 0.45.0` → `C:\Users\congzhisen\.local\bin\rtk.exe`；`rtk gain` 显示历史 45,277 条命令、累计省 19.2M tokens（12.9%）。
+- 定位：**CLI 代理**，拦截 shell 命令并压缩其输出（不是 LSP，不做符号级查询）。100+ 命令过滤器，<10ms 开销。
+- **接入 DSH 的硬障碍**：`rtk init --agent` 的取值只有 `claude / cursor / windsurf / cline / kilocode / antigravity / kimi / pi / hermes / droid / vibe`，**没有 DSH**。它的 hook 挂在「Bash 工具调用」上，而 DSH 的 shell 工具是 `pwsh`，且 `read`/`grep`/`glob` 是原生工具不走 shell —— 与 README 自述的限制一致（"hook only fires on Bash tool calls"）。
+- **本机实测（Windows）**：
+  - 可用：`rtk git status` / `rtk git log` / `rtk find` / `rtk read` / `rtk config` / `rtk gain`。`git log -5` 原生 30 行 → `rtk` 12 行，压缩明显。
+  - **不可用**：`rtk ls`、`rtk rg`、`rtk wc` —— 它们代理到原生 `ls`/`rg`/`wc`，本机 PATH 上没有这些二进制（DSH 的 grep 用自带 ripgrep，系统无独立 `rg`）。报 `Binary 'ls' not found on PATH`。
+  - **噪音问题**：每次调用都会往 stderr 打 `[rtk] No hook installed — run rtk init -g`，在 DSH 的 pwsh 工具里会变成一段红色错误块（约 300 字符）——**这一条就能吃掉大半压缩收益**，必须先解决再谈接入。
+- **可行的三种接法**（按侵入性排序）：
+  1. 显式前缀：我在命令里写 `rtk git status`。零改造，但靠自觉、且受上面的 stderr 噪音拖累。
+  2. AGENTS.md 约定：在仓库/全局 AGENTS.md 写明「git 类命令优先 `rtk git *`」。同样靠自觉。
+  3. 写 DSH 插件做命令改写：类比 rtk 的 hook，在工具调用前把 `git *` 改写成 `rtk git *`。需要确认 `ctx.tools` 是否有 pre-execute 钩子；且只覆盖 shell 一半，原生 fs 工具仍不受益。
+- **判断**：RTK 的收益集中在「shell 命令输出」这一块，而 DSH 会话里 token 大头是 `read` 读文件和工具结果 —— RTK 覆盖不到。叠加 spill 与子代理隔离已存在，**净收益偏小**，优先级低于 LSP。
+
+### LSP 级代码查询（真正的「快查询 + 省 token」）
+
+没有现成 DSH 插件。两条路线：
+
+1. **官方 MCP 客户端桥（推荐先试）**：`@deepseek-ai/dsh-mcp-client@0.2.2-rc.1`，版本号与当前 DSH 完全对齐，定位就是「连接外部 MCP 服务器，把工具注册到 `ctx.tools`」，工具名形如 `mcp__<server>__<tool>`。当前 desktop profile **未装未配**。配置示例（写进 profile 的 `cordis.patch.yml`）：
+
+   ```yaml
+   - id: mcp-serena
+     name: '@deepseek-ai/dsh-mcp-client'
+     config:
+       serverName: serena
+       transport: stdio
+       command: uvx
+       args: ['--from', 'git+https://github.com/oraios/serena', 'serena', 'start-mcp-server', '--context', 'ide-assistant']
+   ```
+
+   接上后可用 Serena（LSP 后端）的 `find_symbol` / `find_referencing_symbols` / `replace_symbol_body` —— 查引用回的是「文件:行号」列表而非整份源码，这才是省 token 的关键。也可换 ast-grep MCP（结构化搜索）。代价：MCP 工具 schema 进每次请求前缀；stdio 子进程有启动开销。
+
+2. **自研 `dsh-lsp-tools` 原生插件**：走 `ctx.tools.register()`，比 MCP 少一层协议开销，输出格式完全可控（可强制「只回 文件:行号:一行摘要」）。后端可挂 `typescript-language-server` / `pyright` / `clangd` / `rust-analyzer`，stdio JSON-RPC。开发量大，需先定语言后端与工具集。
+
+### 建议顺序
+
+1. 先装 MCP 客户端 + 接 Serena 试水（改动小、可回滚、立刻能验证收益）；
+2. 验证有效再考虑自研原生插件；
+3. RTK 最后看：先解决 stderr 噪音与 `ls`/`rg` 缺二进制两个问题，再决定是否值得做命令改写插件。
 
 ## 恢复记录（2026-11-03 误删事故）
 
