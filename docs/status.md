@@ -284,13 +284,13 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 2. 验证有效再考虑自研原生插件；
 3. RTK 最后看：先解决 stderr 噪音与 `ls`/`rg` 缺二进制两个问题，再决定是否值得做命令改写插件。
 
-## codegraph 插件接入记录（2026-11-06，已装）
+## codegraph 接入记录（2026-11-06，已装，走 MCP）
 
-### 做了什么
+### 先试后弃：dsh-plugin-codegraph 0.6.2
 
-装了 [`dsh-plugin-codegraph@0.6.2`](https://github.com/CC19990113/dsh-plugin-codegraph)（MIT，作者 CC ZHAO），
+最初装的是 [`dsh-plugin-codegraph@0.6.2`](https://github.com/CC19990113/dsh-plugin-codegraph)（MIT，作者 CC ZHAO），
 `plugin_manager install_bundle` + `registry=https://registry.npmjs.org/`（profile 默认 registry 是内网镜像）。
-装完四个行全部热加载为 `active`，**无需重启**：
+四个行全部热加载为 `active`：
 
 | 行 id | 模块 | 作用 |
 |---|---|---|
@@ -299,7 +299,8 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 | `codegraph-tree-sitter` | `dsh-plugin-codegraph-tree-sitter` | 自建 tree-sitter 索引器 |
 | `codegraph-tool` | `dsh-plugin-codegraph-tool` | `codegraph` / `codegraph_index` 两个工具 |
 
-在 profile `cordis.patch.yml` 末尾加了两个覆盖（安装本身不写这个文件，是手动加的）：
+当时在 profile `cordis.patch.yml` 末尾加了「关自动索引」的覆盖（安装本身不写这个文件，是手动加的），
+改前备份在 `~/.dsh/backups/cordis.patch.yml.20261106-095345`（含 `.package.json`）：
 
 ```yaml
 - id: codegraph-tree-sitter
@@ -308,11 +309,10 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 - id: codegraph-tool
   name: "dsh-plugin-codegraph-tool"
   config: { backgroundIndex: false, updateCheck: false }
-```
 
 改前备份在 `~/.dsh/backups/cordis.patch.yml.20261106-095345`（含 `.package.json`）。
 
-### 关键发现：现有索引是 schema v11，插件只认 v4 —— 不兼容
+### 关键发现：现有索引是 schema v11，被否掉的插件只认 v4
 
 我此前在对话里说「Cybertron 那个 1.67 GB 的索引可以直接被读」，**这句是错的**，实测推翻：
 
@@ -334,32 +334,60 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。本机 deskt
 当前已通过 `watch: false` + `autoIndexOnSession: false` 把这条路堵死（实测：仓库内未生成 `.codegraph/`，
 Cybertron 的 db 时间戳仍是 11-05 17:29）。
 
-### 现在的状态与两条可选路线
+### 决策：走 MCP，不走自带索引器
 
-- **插件现状**：已装、已启用、**空转**（不建索引、不监听、不自动刷）。只对「由它自己建的 v4 索引」有效。
-- **路线 A（插件，只适合新仓库）**：给没有历史索引的工作区建 v4 索引（如本仓库）。安全，但本仓库只有几个插件，
-  收益有限；**绝不能对 Cybertron 用**。
-- **路线 B（MCP，推荐给 Cybertron）**：走 `@deepseek-ai/dsh-mcp-client@0.2.2-rc.1`（与本机 DSH 版本精确对齐），
-  配置 `codegraph serve --mcp`。CLI 自己认 v11，无需重建索引。等价配置：
+`dsh-plugin-codegraph@0.6.2` 已 `remove_bundle` 卸载，改为
+[`dsh-plugin-codegraph-project@0.1.5`](https://github.com/troytse/dsh-plugin-codegraph-project)（MIT，作者 troytse）。
+它**不碰索引文件**，只通过 `npx` 拉起 `codegraph serve --mcp`，由 CLI 自己读写 v11 —— 格式问题不存在了。
+四个 codegraph 行随之消失，当前只剩一行 `codegraph-project`（已 `active`）。
 
-  ```yaml
-  - id: mcp-codegraph
-    name: '@deepseek-ai/dsh-mcp-client'
-    config:
-      serverName: codegraph
-      transport: stdio
-      command: codegraph
-      args: ['serve', '--mcp']
-  ```
+profile `cordis.patch.yml` 末尾的覆盖：
 
-  也可直接用 `dsh-plugin-codegraph-project@0.1.5` 或 `@hyzyn/dsh-codegraph@0.6.20`（后者 peer 显式列了 `^0.2.2-rc.1`）。
-- 两条路线**不要同时开**：会注册两套功能重叠的工具，污染每次请求的工具 schema。
+```yaml
+- id: codegraph-project
+  name: "dsh-plugin-codegraph-project"
+  config:
+    version: "1.6.2"   # 对齐本机 CLI（1.6.1 写的 v11，用 1.6.2 读）
+    telemetry: false
+```
+
+改前备份：`~/.dsh/backups/cordis.patch.yml.20261106-100229.pre-mcp`（含 `.package.json`）。
+
+### 实测验证（全链路已通）
+
+| 验证项 | 结果 |
+|---|---|
+| MCP 握手 | `initialize` 返回 `serverInfo: {name: codegraph, version: 1.6.2}`，`tools/list` 正常 |
+| 读 v11 索引 | `codegraph_search("AgentLoop")` 命中 `Modules/WebApp/HpsAgent/src/agent-loop.ts:208` 等 5 条 |
+| 单次查询体积 | 546 字符（对比整份源码，这才是省 token 的地方） |
+| npx 冷启动 | **82 秒**（首次下载平台包），热启动 **2.6 秒** |
+| 插件专用缓存 | 已预热 `~/.dsh/codegraph/npm-cache`（307 MB，12 秒） |
+
+工具默认只暴露 `codegraph_explore`。要开其他工具需在**启动 harness 的环境**里导出
+（插件行没有 `env` 配置项）：`export CODEGRAPH_MCP_TOOLS=explore,node,search,callers`。
+
+本仓库也已建索引（87 文件 / 1459 节点 / 2841 边，4.2 秒），并已把 `.codegraph/` 加进 `.gitignore`。
+
+### 已知前提与坑
+
+- **必须重启 DSH 并开新会话**。插件挂在 `ctx.on('agent/created')` 上（`lib/index.js:247`），
+  只对**创建时**插件已激活的会话做项目判定。本会话建于插件安装之前，所以看不到工具 —— 这不是故障。
+- 插件按「会话 cwd 向上走、遇 git 根停、认 `.codegraph/*.db`」定位项目（`lib/locate.js`），
+  与 CLI 规则一致；Cybertron 根目录就有索引，能直接匹配。
+- `~/.codegraph` 与家目录**永不算项目**（除非 `allowHomeProject: true`）。
+- Windows 下 `resolveNpx` 优先取 `npx.cmd`（`lib/pool.js`），本机可用。
+- 本机还有一个 **VS Code 的 CodeGraph 扩展**（PID 54360，父进程 `Code.exe`，11-05 17:26 起）
+  跑着 `serve --mcp --no-watch` 并持有 writer 锁，所以新起的 MCP 服务会以
+  「in-process 只读、不自动同步」的降级模式工作。**查询不受影响**，但索引不会自动跟随改动刷新。
+  需要时在对应目录手动 `codegraph sync`。
 
 ### 待办
 
-- [ ] 决定：路线 A 保留插件但只在特定仓库用，还是 `remove_bundle` 换成路线 B；
+- [ ] **重启 DSH**，在 `E:\5_8U\Cybertron` 或本仓库开新会话，确认 `mcp__codegraph__codegraph_explore`
+      出现在工具列表并能返回结果；
 - [ ] 若要保住 Cybertron 的 v11 索引，**任何情况下都别在那个目录跑 `codegraph_index`**；
-- [ ] 可给上游提 issue：插件 `SUPPORTED_FORMAT_VERSION` 需跟进 CLI 1.6.x 的 v11。
+- [ ] 待评估：只读降级模式下索引会过期，是否需要在收尾时补一条 `codegraph sync`；
+- [ ] 可给 `dsh-plugin-codegraph` 上游提 issue：`SUPPORTED_FORMAT_VERSION` 需跟进 CLI 1.6.x 的 v11。
 
 ## 恢复记录（2026-11-03 误删事故）
 

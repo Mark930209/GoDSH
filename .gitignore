@@ -10,6 +10,9 @@ package-lock.json
 *.local.*
 docs/market-index.local.json
 
+# CodeGraph 本地索引（每台机器各自构建，不入库）
+.codegraph/
+
 # 日志与系统文件
 *.log
 *.tmp
