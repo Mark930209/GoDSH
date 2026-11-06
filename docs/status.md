@@ -12,8 +12,9 @@
 > **2026-11-06 工作区变更（未发版）**：原 `file-tree-context-menu` 已改名为 **`dsh-file-tree`**，
 > 并加入 Git 改动着色 / 字母徽标 / 菜单 Git 摘要。版本号仍是 1.0.1，**未 bump、未打新 tag、
 > 未建 Release、未刷新市场索引**；npm 上的新包名尚不存在，市场索引仍指向旧包名。
-> 代码已提交为 `1dbb9d9`；`validate-plugins`、Host Git 路由测试、Client 加载/模型/菜单测试均通过，
-> **尚未重启 DeepSeek Harness 做 GUI 冒烟**。
+> 代码已提交为 `1dbb9d9`+`d4526ae`；`validate-plugins`、Host Git 路由测试、Client 加载/模型/菜单测试均通过。
+> 2026-11-06 16:51 DSH 已重启并加载新 bundle（本会话的代码即来自新 Host），
+> **GUI 侧冒烟（着色、字母徽标、菜单摘要、原有动作）仍需人工确认一次**。
 `n1n-prompt-tools` 已于 2026-11-06 **整体废弃删除**（从未发版，无 tag / 无 npm 包 / 不在
 市场索引）；它沉淀的缓存与协议知识保留在 `docs/prompt-cache-investigation.md`、
 `docs/dsh-conversation-internals.md`、`docs/text-tool-protocol.md`。
@@ -32,7 +33,7 @@
 |---|---|---|---|---|
 | `plugins/auto-retry` | `dsh-auto-retry` | 1.0.1 | `auto-retry-v1.0.1`（`fb77d67`） | link，active |
 | `plugins/composer-skill-picker` | `dsh-composer-skill-picker` | 1.0.1 | `composer-skill-picker-v1.0.1`（`e30c3b2`） | link，active |
-| `plugins/dsh-file-tree` | `dsh-file-tree`（旧名 `dsh-file-tree-context-menu`） | 1.0.1 | 旧 tag `file-tree-context-menu-v1.0.1`（`2d3e8e1`）；改名后未发新 tag | link 已指向新目录，待重启 |
+| `plugins/dsh-file-tree` | `dsh-file-tree`（旧名 `dsh-file-tree-context-menu`） | 1.0.1 | 旧 tag `file-tree-context-menu-v1.0.1`（`2d3e8e1`）；改名后未发新 tag | link 已指向新目录，16:51 重启后已加载 |
 
 - 公共 npm：三个旧包名的 `latest` 均为 `1.0.1`，已实测 `npm i` 可装在干净目录；
   `dsh-file-tree` 这个新包名尚未发布。
