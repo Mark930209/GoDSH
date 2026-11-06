@@ -73,8 +73,9 @@ git tag + GitHub Release、公共 npm、GitHub Pages 市场索引。
     （加 `publishConfig.access=public`），tag `dsh-file-tree-v1.1.1`，npm 与索引随之更新。
   - **1.1.0 没有 npm 版本**：那次的 tag / Release / 索引条目保留，但 npm 上不存在 1.1.0。
   - **1.1.1 发布结果**：`npm publish` 返回 `+ @guimaxingtian/dsh-file-tree@1.1.1`，
-    tarball 已可下载（32 KB）；registry 的 packument 仍在处理中（`npm view` 暂时 404），
-    过几分钟会自动可见，无需重发。
+    tarball 已可下载（32 KB）；但 registry 的 packument 仍 404 —— 本账号走 **staged publishing**
+    （旧包版本列表里可见 `0.0.0-stage` 占位），需要在 npmjs.com 用 2FA 手动批准后才会公开。
+    批准前 `npm i` 会 404，git / 市场索引安装不受影响。
   - **CI 已知问题（已在 1.1.1 修复）**：`Release plugin` 的「Refresh market index」步骤自
     2026-11-04 起每次都失败。推断原因是 `actions/checkout` 检出 tag 时只配了窄 refspec，
     `git fetch origin main --tags` 不会生成 `refs/remotes/origin/main`，于是
